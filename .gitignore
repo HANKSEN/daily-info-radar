@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+config/sources.json
+*.local.json
+local-data/
+data/
+logs/
+cache/
+state/
+private-config/
+*.log
+node_modules/
+dist/
+coverage/

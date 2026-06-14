@@ -1,0 +1,144 @@
+import type {
+  AnalyzedArticle,
+  ArticleCandidate,
+  ContentType,
+  Domain,
+  ModelUsage,
+  RuntimeConfig,
+  UseTag,
+} from "../types.ts";
+
+export async function analyzeCandidatesWithOpenAI(
+  candidates: ArticleCandidate[],
+  config: RuntimeConfig,
+): Promise<{ articles: AnalyzedArticle[]; usage?: ModelUsage }> {
+  if (!config.ai.baseUrl || !config.ai.apiKey || !config.ai.model) {
+    throw new Error(
+      "Missing AI_BASE_URL, AI_API_KEY or AI_MODEL. Use npm run daily:dry for local validation.",
+    );
+  }
+
+  const response = await fetch(`${config.ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${config.ai.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.ai.model,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You select high-signal AI, technology, and market information for a Chinese daily brief. Return strict compact JSON only. Do not include markdown or prose.",
+        },
+        {
+          role: "user",
+          content: buildPrompt(candidates),
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI request failed: ${response.status} ${await response.text()}`);
+  }
+
+  const payload = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+  };
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) throw new Error("AI response did not include message content.");
+
+  const parsed = JSON.parse(extractJson(content)) as {
+    items: Array<{
+      index: number;
+      domain: Domain;
+      contentType: ContentType;
+      useTags: UseTag[];
+      valueScore: 1 | 2 | 3 | 4 | 5;
+      selected: boolean;
+      recommendationReason: string;
+    }>;
+  };
+  const articles = parsed.items.map((item) => {
+    const candidate = candidates[item.index - 1];
+    if (!candidate) throw new Error(`AI response referenced unknown candidate index: ${item.index}`);
+    return {
+      ...candidate,
+      domain: item.domain,
+      contentType: item.contentType,
+      useTags: item.useTags,
+      valueScore: item.valueScore,
+      selected: item.selected,
+      recommendationReason: item.recommendationReason,
+    };
+  });
+  return {
+    articles,
+    usage: payload.usage
+      ? {
+          promptTokens: payload.usage.prompt_tokens,
+          completionTokens: payload.usage.completion_tokens,
+          totalTokens: payload.usage.total_tokens,
+        }
+      : undefined,
+  };
+}
+
+function buildPrompt(candidates: ArticleCandidate[]): string {
+  return JSON.stringify({
+    task:
+      "Select and classify candidates for a concise Chinese daily brief. Return only compact JSON. Do not repeat title, url, summary, or source fields. Use the 1-based index to refer to each candidate.",
+    allowed: {
+      domain: ["ai", "tech", "market"],
+      contentType: ["official", "deep_dive", "community", "paper", "market", "news"],
+      useTags: ["值得深读", "持续关注", "可做选题", "市场信号"],
+      valueScore: [1, 2, 3, 4, 5],
+    },
+    rules: [
+      "Return 10-20 selected items when enough candidates exist.",
+      "Set selected=false for low-signal candidates.",
+      "recommendationReason must be Chinese and no longer than 60 characters.",
+    ],
+    candidates: candidates.map((candidate, index) => ({
+      index: index + 1,
+      sourceId: candidate.sourceId,
+      sourceName: candidate.sourceName,
+      title: candidate.title,
+      publishedAt: candidate.publishedAt,
+      summary: candidate.summary,
+      language: candidate.language,
+      domainHint: candidate.domainHint,
+      localSignals: candidate.localSignals,
+    })),
+    outputShape: {
+      items: [
+        {
+          index: 1,
+          domain: "ai",
+          contentType: "official",
+          useTags: ["值得深读", "持续关注"],
+          valueScore: 4,
+          selected: true,
+          recommendationReason: "中文短理由",
+        },
+      ],
+    },
+  });
+}
+
+function extractJson(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) return trimmed;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  throw new Error("Unable to extract JSON from AI response.");
+}
