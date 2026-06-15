@@ -24,8 +24,9 @@ test("dry-run pipeline writes daily outputs only to the private data directory",
   });
 
   assert.equal(result.brief.date, "2026-06-13");
-  assert.ok(result.brief.items.length >= 10);
+  assert.ok(result.brief.items.length > 0);
   assert.ok(result.brief.items.length <= 20);
+  assert.ok(result.brief.items.every((item) => item.selected && item.valueScore >= 3));
 
   const jsonPath = path.join(dataDir, "briefs", "json", "2026-06-13.json");
   const markdownPath = path.join(dataDir, "briefs", "markdown", "2026-06-13.md");

@@ -1,16 +1,58 @@
 import type { SourceConfig, SourceItem } from "../types.ts";
+import { fetchText } from "../http.ts";
+
+const RSS_TIMEOUT_MS = 8000;
+type RssFallbackSource = {
+  url: string;
+  sourceId?: string;
+  sourceName?: string;
+};
+
+const RSS_FALLBACK_URLS: Record<string, RssFallbackSource[]> = {
+  "huggingface-blog": [
+    {
+      url: "https://www.bestblogs.dev/en/feeds/rss?category=ai&minScore=90",
+      sourceId: "bestblogs-ai-high-score",
+      sourceName: "BestBlogs AI 高分内容",
+    },
+  ],
+};
 
 export async function collectRssSource(source: SourceConfig): Promise<SourceItem[]> {
-  const response = await fetch(source.url, {
-    headers: {
-      "user-agent": "daily-info-radar/0.1",
-    },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${source.name}: ${response.status}`);
+  const targets = getRssSourceTargets(source);
+  const errors: unknown[] = [];
+  for (const target of targets) {
+    try {
+      const response = await fetchText(target.url, {
+        headers: {
+          "user-agent": "daily-info-radar/0.1",
+        },
+        timeoutMs: RSS_TIMEOUT_MS,
+        curlFallback: true,
+      });
+      return parseRss(response.text, applyFallbackSource(source, target));
+    } catch (error) {
+      errors.push(error);
+    }
   }
-  return parseRss(await response.text(), source);
+  throw new Error(`Failed to fetch ${source.name} from all RSS URLs`, { cause: errors });
+}
+
+export function getRssSourceUrls(source: Pick<SourceConfig, "id" | "url">): string[] {
+  return getRssSourceTargets(source).map((target) => target.url);
+}
+
+function getRssSourceTargets(source: Pick<SourceConfig, "id" | "url">): RssFallbackSource[] {
+  return [{ url: source.url }, ...(RSS_FALLBACK_URLS[source.id] ?? [])];
+}
+
+function applyFallbackSource(source: SourceConfig, target: RssFallbackSource): SourceConfig {
+  return {
+    ...source,
+    id: target.sourceId ?? source.id,
+    name: target.sourceName ?? source.name,
+    url: target.url,
+  };
 }
 
 export function parseRss(xml: string, source: SourceConfig): SourceItem[] {

@@ -101,8 +101,11 @@ function buildPrompt(candidates: ArticleCandidate[]): string {
       valueScore: [1, 2, 3, 4, 5],
     },
     rules: [
-      "Return 10-20 selected items when enough candidates exist.",
-      "Set selected=false for low-signal candidates.",
+      "Quality is more important than count. Do not fill the brief with weak items.",
+      "Return up to 20 selected items. It is acceptable to return fewer than 10 selected items.",
+      "selected=true is allowed only when valueScore>=3.",
+      "Set selected=false for low-signal, non-core, generic, off-topic, low-value, or weak-news candidates.",
+      "Never select items whose recommendationReason would be 信号一般, 非高价值, 非核心科技新闻, 低分, 信号弱, or 时效性低.",
       "recommendationReason must be Chinese and no longer than 60 characters.",
     ],
     candidates: candidates.map((candidate, index) => ({

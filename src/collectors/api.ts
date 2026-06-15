@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { SourceConfig, SourceItem } from "../types.ts";
 
 const API_LIMIT = 30;
@@ -23,6 +25,23 @@ export async function collectApiSource(source: SourceConfig): Promise<SourceItem
   if (source.id === "huggingface-daily-papers") {
     const payload = await fetchJson(source.url);
     return parseHuggingFaceDailyPapers(payload, source).slice(0, API_LIMIT);
+  }
+
+  if (source.id === "zhihu-hot") {
+    const payload = await fetchJson(source.url, zhihuHeaders());
+    return parseZhihuHotList(payload, source).slice(0, API_LIMIT);
+  }
+
+  if (source.id === "wallstreetcn-news") {
+    const payload = await fetchJson(source.url);
+    return parseWallstreetcnNews(payload, source).slice(0, API_LIMIT);
+  }
+
+  if (source.id === "cls-telegraph") {
+    const payload = await fetchJson(buildClsTelegraphUrl(source.url), {
+      referer: "https://www.cls.cn/telegraph",
+    });
+    return parseClsTelegraph(payload, source).slice(0, API_LIMIT);
   }
 
   return [];
@@ -124,9 +143,144 @@ export function parseHuggingFaceDailyPapers(payload: unknown, source: SourceConf
   });
 }
 
-async function fetchJson(url: string): Promise<unknown> {
+export function parseZhihuHotList(
+  payload: unknown,
+  source: SourceConfig,
+  now = new Date(),
+): SourceItem[] {
+  const records = Array.isArray((payload as { data?: unknown[] })?.data)
+    ? (payload as { data: unknown[] }).data
+    : [];
+
+  return records.flatMap((entry) => {
+    const record = entry as {
+      target?: {
+        title_area?: { text?: string };
+        excerpt_area?: { text?: string };
+        metrics_area?: { text?: string };
+        link?: { url?: string };
+      };
+    };
+    const title = record.target?.title_area?.text;
+    const url = record.target?.link?.url;
+    if (!title || !url) return [];
+    const summary = [record.target?.excerpt_area?.text, record.target?.metrics_area?.text]
+      .filter(Boolean)
+      .join(" | ");
+    return [
+      {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceWeight: source.weight,
+        sourceSubcategory: source.subcategory,
+        domainHint: source.domainHint,
+        language: source.lang,
+        title,
+        url,
+        summary,
+        publishedAt: now.toISOString(),
+      },
+    ];
+  });
+}
+
+export function parseWallstreetcnNews(payload: unknown, source: SourceConfig): SourceItem[] {
+  const records = Array.isArray(
+    (payload as { data?: { items?: unknown[] } })?.data?.items,
+  )
+    ? (payload as { data: { items: unknown[] } }).data.items
+    : [];
+
+  return records.flatMap((entry) => {
+    const wrapper = entry as {
+      resource_type?: string;
+      resource?: {
+        id?: number | string;
+        title?: string;
+        content_short?: string;
+        content_text?: string;
+        display_time?: number;
+        type?: string;
+        uri?: string;
+      };
+    };
+    const resource = wrapper.resource;
+    if (!resource) return [];
+    if (wrapper.resource_type === "theme" || wrapper.resource_type === "ad") return [];
+    if (resource.type === "live" || !resource.uri) return [];
+    const title = resource.title ?? resource.content_short ?? resource.content_text;
+    if (!title) return [];
+    return [
+      {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceWeight: source.weight,
+        sourceSubcategory: source.subcategory,
+        domainHint: source.domainHint,
+        language: source.lang,
+        title,
+        url: normalizeWallstreetcnUrl(resource.uri),
+        summary: resource.content_short ?? resource.content_text,
+        publishedAt: secondsToIso(resource.display_time),
+      },
+    ];
+  });
+}
+
+export function parseClsTelegraph(payload: unknown, source: SourceConfig): SourceItem[] {
+  const records = Array.isArray(
+    (payload as { data?: { roll_data?: unknown[] } })?.data?.roll_data,
+  )
+    ? (payload as { data: { roll_data: unknown[] } }).data.roll_data
+    : [];
+
+  return records.flatMap((entry) => {
+    const record = entry as {
+      id?: number | string;
+      title?: string;
+      brief?: string;
+      shareurl?: string;
+      ctime?: number;
+      is_ad?: number;
+    };
+    if (record.is_ad) return [];
+    const title = record.title ?? record.brief;
+    if (!record.id || !title) return [];
+    return [
+      {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceWeight: source.weight,
+        sourceSubcategory: source.subcategory,
+        domainHint: source.domainHint,
+        language: source.lang,
+        title,
+        url: record.shareurl ?? `https://www.cls.cn/detail/${record.id}`,
+        summary: record.brief,
+        publishedAt: secondsToIso(record.ctime),
+      },
+    ];
+  });
+}
+
+export function buildClsTelegraphUrl(baseUrl: string, now = new Date()): string {
+  const params = new URLSearchParams({
+    appName: "CailianpressWeb",
+    last_time: Math.floor(now.getTime() / 1000).toString(),
+    os: "web",
+    refresh_type: "1",
+    rn: API_LIMIT.toString(),
+    sv: "7.7.5",
+  });
+  params.sort();
+  const sign = md5(sha1(params.toString()));
+  params.append("sign", sign);
+  return `${baseUrl}?${params.toString()}`;
+}
+
+async function fetchJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
   const response = await fetch(url, {
-    headers: { "user-agent": "daily-info-radar/0.1" },
+    headers: { "user-agent": "daily-info-radar/0.1", ...headers },
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) throw new Error(`API request failed: ${response.status} ${url}`);
@@ -142,4 +296,25 @@ function normalizeDate(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+}
+
+function normalizeWallstreetcnUrl(value: string): string {
+  if (/^https?:\/\//iu.test(value)) return value;
+  return `https://wallstreetcn.com${value.startsWith("/") ? "" : "/"}${value}`;
+}
+
+function zhihuHeaders(): Record<string, string> {
+  return {
+    referer: "https://www.zhihu.com/hot",
+    "user-agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 daily-info-radar/0.1",
+  };
+}
+
+function sha1(value: string): string {
+  return createHash("sha1").update(value).digest("hex");
+}
+
+function md5(value: string): string {
+  return createHash("md5").update(value).digest("hex");
 }

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { loadSourceConfig } from "../src/config.ts";
+import { checkSources } from "../src/sources.ts";
 
 test("default source config uses rss, api, and scrape source kinds", async () => {
   const sources = await loadSourceConfig(repoRoot(), {
@@ -39,4 +40,62 @@ test("package exposes sources and sources:check scripts", async () => {
 
   assert.equal(packageJson.scripts.sources, "node --experimental-strip-types src/cli.ts sources");
   assert.equal(packageJson.scripts["sources:check"], "node --experimental-strip-types src/cli.ts sources:check");
+});
+
+test("checkSources reports RSS fallback health when primary URL fails", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("huggingface.co")) throw new Error("fetch failed");
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const [result] = await checkSources([
+      {
+        id: "huggingface-blog",
+        name: "Hugging Face Blog",
+        kind: "rss",
+        url: "https://huggingface.co/blog/feed.xml",
+      },
+    ], { curlFallback: false });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.fallback, true);
+    assert.match(result.checkedUrl ?? "", /www\.bestblogs\.dev\/en\/feeds\/rss/);
+    assert.equal(calls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("checkSources can validate GitHub Trending through API fallback", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes("github.com/trending")) throw new Error("timeout");
+    if (url.includes("api.github.com/search/repositories")) {
+      return new Response("ok", { status: 200 });
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  try {
+    const [result] = await checkSources([
+      {
+        id: "github-trending",
+        name: "GitHub Trending",
+        kind: "scrape",
+        url: "https://github.com/trending?since=daily",
+      },
+    ], { curlFallback: false });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.fallback, true);
+    assert.match(result.checkedUrl ?? "", /api\.github\.com\/search\/repositories/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

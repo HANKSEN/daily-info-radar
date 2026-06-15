@@ -1,4 +1,7 @@
 import type { SourceConfig } from "./types.ts";
+import { getRssSourceUrls } from "./collectors/rss.ts";
+import { buildGitHubTrendingFallbackUrl } from "./collectors/scrape.ts";
+import { checkUrl } from "./http.ts";
 
 export type SourceCheckResult = {
   id: string;
@@ -8,6 +11,9 @@ export type SourceCheckResult = {
   ok: boolean;
   status?: number;
   itemCount?: number;
+  checkedUrl?: string;
+  fallback?: boolean;
+  viaCurl?: boolean;
   error?: string;
 };
 
@@ -35,33 +41,55 @@ export function summarizeSources(sources: SourceConfig[]): Array<{
   }));
 }
 
-export async function checkSources(sources: SourceConfig[]): Promise<SourceCheckResult[]> {
+export async function checkSources(
+  sources: SourceConfig[],
+  options: { curlFallback?: boolean } = {},
+): Promise<SourceCheckResult[]> {
+  const curlFallback = options.curlFallback ?? true;
   const results = await Promise.all(
     sources.map(async (source) => {
-      try {
-        const response = await fetch(source.url, {
+      const urls = getSourceCheckUrls(source);
+      let lastError: string | undefined;
+
+      for (const [index, url] of urls.entries()) {
+        const fallback = index > 0;
+        const result = await checkUrl(url, {
           headers: { "user-agent": "daily-info-radar/0.1" },
-          signal: AbortSignal.timeout(8000),
+          timeoutMs: 8000,
+          curlFallback: curlFallback && source.kind === "rss",
         });
-        return {
-          id: source.id,
-          name: source.name,
-          kind: source.kind,
-          url: source.url,
-          ok: response.ok,
-          status: response.status,
-        };
-      } catch (error) {
-        return {
-          id: source.id,
-          name: source.name,
-          kind: source.kind,
-          url: source.url,
-          ok: false,
-          error: error instanceof Error ? error.message : "unknown error",
-        };
+        if (result.ok) {
+          return {
+            id: source.id,
+            name: source.name,
+            kind: source.kind,
+            url: source.url,
+            ok: true,
+            status: result.status,
+            checkedUrl: url,
+            fallback,
+            viaCurl: result.viaCurl,
+          };
+        } else {
+          lastError = result.error;
+        }
       }
+
+      return {
+        id: source.id,
+        name: source.name,
+        kind: source.kind,
+        url: source.url,
+        ok: false,
+        error: lastError,
+      };
     }),
   );
   return results;
+}
+
+function getSourceCheckUrls(source: SourceConfig): string[] {
+  if (source.kind === "rss") return getRssSourceUrls(source);
+  if (source.id === "github-trending") return [source.url, buildGitHubTrendingFallbackUrl()];
+  return [source.url];
 }

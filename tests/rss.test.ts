@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseRss } from "../src/collectors/rss.ts";
+import { collectRssSource, parseRss } from "../src/collectors/rss.ts";
 
 test("parseRss preserves configured source weight on each item", () => {
   const items = parseRss(
@@ -29,4 +29,52 @@ test("parseRss preserves configured source weight on each item", () => {
 
   assert.equal(items.length, 1);
   assert.equal(items[0].sourceWeight, 1.2);
+});
+
+test("collectRssSource falls back for Hugging Face blog RSS failures", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = input.toString();
+    requestedUrls.push(url);
+    if (url === "https://huggingface.co/blog/feed.xml") {
+      throw new TypeError("fetch failed");
+    }
+    return new Response(
+      `
+      <rss>
+        <channel>
+          <item>
+            <title>Hugging Face fallback article</title>
+            <link>https://huggingface.co/blog/fallback</link>
+            <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
+          </item>
+        </channel>
+      </rss>
+      `,
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  try {
+    const items = await collectRssSource({
+      id: "huggingface-blog",
+      name: "Hugging Face Blog",
+      kind: "rss",
+      url: "https://huggingface.co/blog/feed.xml",
+      domainHint: "ai",
+      weight: 1.1,
+    });
+
+    assert.deepEqual(requestedUrls, [
+      "https://huggingface.co/blog/feed.xml",
+      "https://www.bestblogs.dev/en/feeds/rss?category=ai&minScore=90",
+    ]);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].title, "Hugging Face fallback article");
+    assert.equal(items[0].sourceId, "bestblogs-ai-high-score");
+    assert.equal(items[0].sourceName, "BestBlogs AI 高分内容");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
