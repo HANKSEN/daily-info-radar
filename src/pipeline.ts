@@ -46,7 +46,7 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
   const maxPerSource = options.maxPerSource ?? options.config?.maxPerSource ?? 8;
 
   const inputs = await resolveInputs(options);
-  const candidates = buildCandidates(inputs.sourceItems, { candidatePoolMax, maxPerSource });
+  const candidates = buildCandidates(inputs.sourceItems, { candidatePoolMax, maxPerSource, now });
   const analysis = await analyzeCandidates(candidates, options);
   const items = rankArticles(analysis.articles, { minItems, maxItems });
 
@@ -88,15 +88,34 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
 
 export function buildCandidates(
   sourceItems: SourceItem[],
-  options: { candidatePoolMax?: number; maxPerSource?: number } = {},
+  options: { candidatePoolMax?: number; maxPerSource?: number; now?: Date; maxAgeHours?: number } = {},
 ): ArticleCandidate[] {
+  const now = options.now ?? new Date();
+  const maxAgeHours = options.maxAgeHours ?? 24;
+  const freshSourceItems = sourceItems.filter((item) =>
+    isPublishedWithinWindow(item.publishedAt, now, maxAgeHours)
+  );
   const candidates = prefilterCandidates(
-    dedupeCandidates(sourceItems.map((item) => normalizeSourceItem(item))),
+    dedupeCandidates(freshSourceItems.map((item) => normalizeSourceItem(item))),
   );
   return fairSampleCandidates(candidates, {
     maxTotal: options.candidatePoolMax ?? 80,
     maxPerSource: options.maxPerSource ?? 8,
   });
+}
+
+function isPublishedWithinWindow(
+  publishedAt: string | undefined,
+  now: Date,
+  maxAgeHours: number,
+): boolean {
+  if (!publishedAt) return false;
+  const publishedTime = Date.parse(publishedAt);
+  if (!Number.isFinite(publishedTime)) return false;
+
+  const nowTime = now.getTime();
+  const windowStart = nowTime - maxAgeHours * 60 * 60 * 1000;
+  return publishedTime >= windowStart && publishedTime <= nowTime;
 }
 
 async function resolveInputs(options: RunDailyPipelineOptions): Promise<{

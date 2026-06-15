@@ -11,13 +11,14 @@ It is designed for researchers, creators, product builders, investors, and engin
 ## What It Solves
 
 - Fragmented sources: aggregate official blogs, technical communities, Chinese tech media, and market snapshots.
-- High noise: rank by source quality, freshness, duplication, and AI/rule-based analysis.
+- High noise: only keep items published in the previous 24 hours, then rank by source quality, duplication, and AI/rule-based analysis.
 - Repetitive routine: archive locally, push to Lark, add selected items to Obsidian, and run on a schedule.
 - Data/code separation: production data is written outside the repository, so reusable code can be open-sourced safely.
 
 ## Features
 
 - RSS, API, scraping, and market data collectors.
+- 24-hour freshness window: only items published in the previous 24 hours enter the candidate pool.
 - Candidate deduplication and fair source sampling.
 - OpenAI-compatible analysis mode or local heuristic mode.
 - Lark/Feishu push using interactive message cards with clickable article links.

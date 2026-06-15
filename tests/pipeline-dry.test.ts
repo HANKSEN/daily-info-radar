@@ -4,8 +4,9 @@ import path from "node:path";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { runDailyPipeline } from "../src/pipeline.ts";
+import { buildCandidates, runDailyPipeline } from "../src/pipeline.ts";
 import { createDryRunFixture } from "../src/fixtures/dryRunFixture.ts";
+import type { SourceItem } from "../src/types.ts";
 
 test("dry-run pipeline writes daily outputs only to the private data directory", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "radar-pipeline-"));
@@ -48,3 +49,37 @@ test("dry-run pipeline writes daily outputs only to the private data directory",
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("buildCandidates keeps only items published in the previous 24 hours", () => {
+  const now = new Date("2026-06-15T08:30:00.000Z");
+  const items: SourceItem[] = [
+    item("recent", "Recent model release", "2026-06-15T08:00:00.000Z"),
+    item("boundary", "Boundary AI funding news", "2026-06-14T08:30:00.000Z"),
+    item("stale", "Stale product update", "2026-06-14T08:29:59.000Z"),
+    item("future", "Future launch rumor", "2026-06-15T08:31:00.000Z"),
+    item("unknown", "Unknown publish time"),
+  ];
+
+  const candidates = buildCandidates(items, {
+    now,
+    candidatePoolMax: 10,
+    maxPerSource: 10,
+  });
+
+  assert.deepEqual(
+    candidates.map((candidate) => candidate.sourceId),
+    ["recent", "boundary"],
+  );
+});
+
+function item(sourceId: string, title: string, publishedAt?: string): SourceItem {
+  return {
+    sourceId,
+    sourceName: sourceId,
+    title,
+    url: `https://example.com/${sourceId}`,
+    publishedAt,
+    summary: "AI and tech market update.",
+    domainHint: "ai",
+  };
+}

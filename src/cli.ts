@@ -60,6 +60,7 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
       timezone: config.timezone,
       minItems: config.minItems,
       maxItems: config.maxItems,
+      now: dryRun ? new Date("2026-06-13T00:30:00.000Z") : undefined,
       sourceItems: fixture?.sourceItems,
       marketSnapshots: fixture?.marketSnapshots,
       dryRun,
@@ -161,12 +162,14 @@ async function collectCommand(
   env: Record<string, string | undefined>,
 ): Promise<void> {
   await ensureStorage(config.dataDir);
-  const date = formatDateInTimezone(new Date(), config.timezone);
+  const now = new Date();
+  const date = formatDateInTimezone(now, config.timezone);
   const sources = await loadSourceConfig(config.repoRoot, env);
   const inputs = await collectDailyInputs(sources);
   const candidates = buildCandidates(inputs.sourceItems, {
     candidatePoolMax: config.candidatePoolMax,
     maxPerSource: config.maxPerSource,
+    now,
   });
   const paths = dailyPaths(config.dataDir, date);
   await writeJson(paths.raw, inputs);
