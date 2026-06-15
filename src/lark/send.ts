@@ -58,9 +58,21 @@ export async function sendLarkCard(options: LarkCardSendOptions): Promise<{
   return runCommand("lark-cli", args);
 }
 
+export function buildLarkCliEnv(
+  env: Record<string, string | undefined> = process.env,
+): Record<string, string | undefined> {
+  return {
+    ...env,
+    LARK_CLI_NO_PROXY: "1",
+  };
+}
+
 function runCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: buildLarkCliEnv(),
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");

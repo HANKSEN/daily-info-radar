@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildLarkMessageArgs, buildLarkSendArgs } from "../src/lark/send.ts";
+import { buildLarkCliEnv, buildLarkMessageArgs, buildLarkSendArgs } from "../src/lark/send.ts";
 import { renderDailyBriefLarkCard } from "../src/renderers/larkCard.ts";
 import type { DailyBrief } from "../src/types.ts";
 
@@ -60,6 +60,13 @@ test("renderDailyBriefLarkCard includes clickable article links", () => {
   assert.match(serialized, /每日信息雷达/);
   assert.match(serialized, /\[OpenAI update\]\(https:\/\/example.com\/openai\)/);
   assert.match(serialized, /市场快照/);
+});
+
+test("buildLarkCliEnv disables proxy use for lark-cli subprocesses", () => {
+  const env = buildLarkCliEnv({ LARK_CLI_NO_PROXY: "0", HTTPS_PROXY: "http://127.0.0.1:7897" });
+
+  assert.equal(env.LARK_CLI_NO_PROXY, "1");
+  assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:7897");
 });
 
 function createBrief(): DailyBrief {
