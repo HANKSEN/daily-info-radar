@@ -1,12 +1,14 @@
 import type {
   AnalyzedArticle,
   ArticleCandidate,
+  CognitiveSignal,
   ContentType,
   Domain,
   ModelUsage,
   RuntimeConfig,
   UseTag,
 } from "../types.ts";
+import { normalizeCognitiveSignal } from "../cognitive.ts";
 
 export async function analyzeCandidatesWithOpenAI(
   candidates: ArticleCandidate[],
@@ -63,6 +65,7 @@ export async function analyzeCandidatesWithOpenAI(
       valueScore: 1 | 2 | 3 | 4 | 5;
       selected: boolean;
       recommendationReason: string;
+      cognitiveSignal?: Partial<CognitiveSignal>;
     }>;
   };
   const articles = parsed.items.map((item) => {
@@ -76,6 +79,14 @@ export async function analyzeCandidatesWithOpenAI(
       valueScore: item.valueScore,
       selected: item.selected,
       recommendationReason: item.recommendationReason,
+      cognitiveSignal: normalizeCognitiveSignal(item.cognitiveSignal, {
+        candidate,
+        domain: item.domain,
+        contentType: item.contentType,
+        useTags: item.useTags,
+        valueScore: item.valueScore,
+        recommendationReason: item.recommendationReason,
+      }),
     };
   });
   return {
@@ -99,6 +110,11 @@ function buildPrompt(candidates: ArticleCandidate[]): string {
       contentType: ["official", "deep_dive", "community", "paper", "market", "news"],
       useTags: ["值得深读", "持续关注", "可做选题", "市场信号"],
       valueScore: [1, 2, 3, 4, 5],
+      cognitiveSignal: {
+        score: [1, 2, 3, 4, 5],
+        priority: ["精读", "扫读", "追踪", "跳过"],
+        tags: ["判断更新", "能力增强", "行动线索", "创作素材", "趋势信号", "系统优化"],
+      },
     },
     rules: [
       "Quality is more important than count. Do not fill the brief with weak items.",
@@ -107,6 +123,10 @@ function buildPrompt(candidates: ArticleCandidate[]): string {
       "Set selected=false for low-signal, non-core, generic, off-topic, low-value, or weak-news candidates.",
       "Never select items whose recommendationReason would be 信号一般, 非高价值, 非核心科技新闻, 低分, 信号弱, or 时效性低.",
       "recommendationReason must be Chinese and no longer than 60 characters.",
+      "cognitiveSignal describes how this item may help a personal cognitive production line, not just why it is newsworthy.",
+      "Set cognitiveSignal.priority=精读 only for items that may change judgment, deepen capability, or become a strong content asset.",
+      "cognitiveSignal.hypothesis must state what judgment may be updated, in Chinese and no longer than 90 characters.",
+      "cognitiveSignal.contentAngle must state one concrete creation angle, in Chinese and no longer than 80 characters.",
     ],
     candidates: candidates.map((candidate, index) => ({
       index: index + 1,
@@ -129,6 +149,13 @@ function buildPrompt(candidates: ArticleCandidate[]): string {
           valueScore: 4,
           selected: true,
           recommendationReason: "中文短理由",
+          cognitiveSignal: {
+            score: 5,
+            priority: "精读",
+            tags: ["判断更新", "创作素材"],
+            hypothesis: "它可能更新我对某个 AI 趋势、产品机制或行动优先级的判断",
+            contentAngle: "围绕它写一条今日认知增量或一篇精读拆解",
+          },
         },
       ],
     },

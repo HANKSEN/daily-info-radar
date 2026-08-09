@@ -11,6 +11,7 @@ import { analyzeCandidatesHeuristically } from "./ai/heuristic.ts";
 import { analyzeCandidatesWithOpenAI } from "./ai/openaiCompatible.ts";
 import { rankArticles } from "./rank.ts";
 import { renderDailyBriefMarkdown } from "./renderers/markdown.ts";
+import { renderCognitiveProductionMarkdown } from "./renderers/production.ts";
 import { renderDailyBriefLarkCard } from "./renderers/larkCard.ts";
 import {
   appendDailyRunLog,
@@ -35,6 +36,13 @@ import {
   unloadLaunchdPlists,
   writeLaunchdPlists,
 } from "./launchd.ts";
+import {
+  installScheduler,
+  renderSchedulerPreview,
+  schedulerStatus,
+  uninstallScheduler,
+} from "./scheduler.ts";
+import { initializeSetup, inspectSetup } from "./setup.ts";
 
 const command = process.argv[2] ?? "help";
 const flags = new Set(process.argv.slice(3));
@@ -50,6 +58,66 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const env = await loadDotEnv(repoRoot);
   const config = loadRuntimeConfig({ repoRoot, env });
+
+  if (commandName === "setup") {
+    const initialized = await initializeSetup({ repoRoot: config.repoRoot, dataDir: config.dataDir });
+    const refreshedEnv = await loadDotEnv(repoRoot, {});
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env: refreshedEnv,
+    });
+    console.log(JSON.stringify({ ok: true, initialized, setup }, null, 2));
+    return;
+  }
+
+  if (commandName === "setup:check") {
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    console.log(JSON.stringify({ ok: true, setup }, null, 2));
+    return;
+  }
+
+  if (commandName === "verify") {
+    const sources = await loadSourceConfig(config.repoRoot, env);
+    const sourceResults = await checkSources(sources);
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    const fixture = createDryRunFixture();
+    const dryRun = await runDailyPipeline({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      timezone: config.timezone,
+      minItems: config.minItems,
+      maxItems: config.maxItems,
+      now: new Date("2026-06-13T00:30:00.000Z"),
+      sourceItems: fixture.sourceItems,
+      marketSnapshots: fixture.marketSnapshots,
+      dryRun: true,
+      config,
+      sourceEnv: env,
+    });
+    const sourceOkCount = sourceResults.filter((result) => result.ok).length;
+    const ok = setup.overallReady && sourceOkCount > 0;
+    console.log(JSON.stringify({
+      ok,
+      setup,
+      sources: {
+        checked: sourceResults.length,
+        okCount: sourceOkCount,
+        failed: sourceResults.filter((result) => !result.ok),
+      },
+      dryRun: { ok: true, date: dryRun.brief.date, paths: dryRun.paths },
+    }, null, 2));
+    if (!ok) process.exitCode = 2;
+    return;
+  }
 
   if (commandName === "daily") {
     const dryRun = cliFlags.has("--dry-run");
@@ -84,9 +152,24 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
   if (commandName === "render") {
     const brief = await readLatestBrief(config.dataDir);
     const markdown = renderDailyBriefMarkdown(brief);
+    const productionMarkdown = renderCognitiveProductionMarkdown(brief);
     const paths = dailyPaths(config.dataDir, brief.date);
     await writeFile(paths.briefMarkdown, markdown, "utf8");
-    console.log(JSON.stringify({ ok: true, markdown: paths.briefMarkdown }, null, 2));
+    await writeFile(paths.productionMarkdown, productionMarkdown, "utf8");
+    console.log(JSON.stringify({
+      ok: true,
+      markdown: paths.briefMarkdown,
+      productionMarkdown: paths.productionMarkdown,
+    }, null, 2));
+    return;
+  }
+
+  if (commandName === "production") {
+    const brief = await readLatestBrief(config.dataDir);
+    const productionMarkdown = renderCognitiveProductionMarkdown(brief);
+    const paths = dailyPaths(config.dataDir, brief.date);
+    await writeFile(paths.productionMarkdown, productionMarkdown, "utf8");
+    console.log(JSON.stringify({ ok: true, productionMarkdown: paths.productionMarkdown }, null, 2));
     return;
   }
 
@@ -114,7 +197,12 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
         okCount: results.filter((result) => result.ok).length,
       },
     });
-    console.log(JSON.stringify({ ok: true, readiness, sources: results }, null, 2));
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    console.log(JSON.stringify({ ok: true, readiness, setup, sources: results }, null, 2));
     return;
   }
 
@@ -154,7 +242,33 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
     return;
   }
 
-  console.log("Usage: npm run daily[:dry] | npm run collect | npm run analyze | npm run render | npm run sources | npm run sources:check | npm run doctor | npm run send:latest | npm run obsidian:add | npm run bot | npm run launchd:print | npm run launchd:install | npm run launchd:uninstall");
+  if (commandName === "scheduler:print") {
+    console.log(JSON.stringify({
+      ok: true,
+      scheduler: renderSchedulerPreview(configuredSchedulerOptions(config, env)),
+    }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:install") {
+    const result = await installScheduler(configuredSchedulerOptions(config, env));
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:status") {
+    const result = await schedulerStatus(config.repoRoot);
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:uninstall") {
+    const result = await uninstallScheduler(config.repoRoot);
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  console.log("Usage: npm run setup | npm run setup:check | npm run verify | npm run daily[:dry] | npm run collect | npm run analyze | npm run render | npm run production | npm run sources | npm run sources:check | npm run doctor | npm run send:latest | npm run obsidian:add | npm run bot | npm run scheduler:print | npm run scheduler:install | npm run scheduler:status | npm run scheduler:uninstall");
 }
 
 async function collectCommand(
@@ -213,6 +327,7 @@ async function analyzeCommand(
     modelUsage,
   };
   const markdown = renderDailyBriefMarkdown(brief);
+  const productionMarkdown = renderCognitiveProductionMarkdown(brief);
   const paths = await writeDailyArtifacts({
     dataDir: config.dataDir,
     date: latest.date,
@@ -221,6 +336,7 @@ async function analyzeCommand(
     analyzed,
     brief,
     markdown,
+    productionMarkdown,
   });
   await appendDailyRunLog(config.dataDir, {
     date: latest.date,
@@ -457,4 +573,17 @@ function renderConfiguredLaunchdPlists(
     hour: Number(env.RADAR_DAILY_HOUR ?? 8),
     minute: Number(env.RADAR_DAILY_MINUTE ?? 0),
   });
+}
+
+function configuredSchedulerOptions(
+  config: ReturnType<typeof loadRuntimeConfig>,
+  env: Record<string, string | undefined>,
+) {
+  return {
+    repoRoot: config.repoRoot,
+    dataDir: config.dataDir,
+    nodePath: process.execPath,
+    hour: Number(env.RADAR_DAILY_HOUR ?? 8),
+    minute: Number(env.RADAR_DAILY_MINUTE ?? 0),
+  };
 }

@@ -17,6 +17,7 @@ import { normalizeSourceItem } from "./normalize.ts";
 import { prefilterCandidates } from "./prefilter.ts";
 import { rankArticles } from "./rank.ts";
 import { renderDailyBriefMarkdown } from "./renderers/markdown.ts";
+import { renderCognitiveProductionMarkdown } from "./renderers/production.ts";
 import { fairSampleCandidates } from "./sampling.ts";
 import { appendDailyRunLog, writeDailyArtifacts } from "./storage.ts";
 
@@ -60,6 +61,7 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
   };
 
   const markdown = renderDailyBriefMarkdown(brief);
+  const productionMarkdown = renderCognitiveProductionMarkdown(brief);
   const paths = await writeDailyArtifacts({
     dataDir: options.dataDir,
     date,
@@ -68,6 +70,7 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
     analyzed: analysis.articles,
     brief,
     markdown,
+    productionMarkdown,
   });
   await appendDailyRunLog(options.dataDir, {
     date,

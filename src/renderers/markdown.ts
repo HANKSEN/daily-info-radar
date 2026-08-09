@@ -49,7 +49,7 @@ function renderMarketSnapshot(snapshot: MarketSnapshot): string {
 
 function renderArticle(item: AnalyzedArticle, index: number): string {
   const tags = item.useTags.length > 0 ? item.useTags.join(" / ") : "持续关注";
-  return [
+  const lines = [
     `### [${index}] [${item.title}](${item.canonicalUrl})`,
     "",
     `- 领域：${DOMAIN_LABELS[item.domain]}`,
@@ -58,5 +58,12 @@ function renderArticle(item: AnalyzedArticle, index: number): string {
     `- 时间：${item.publishedAt ?? "未知"}`,
     `- 标签：${tags}`,
     `- 推荐理由：${item.recommendationReason}`,
-  ].join("\n");
+  ];
+  if (item.cognitiveSignal) {
+    lines.push(`- 认知优先级：${item.cognitiveSignal.priority} / ${item.cognitiveSignal.score}/5`);
+    lines.push(`- 认知标签：${item.cognitiveSignal.tags.join(" / ")}`);
+    lines.push(`- 增量假设：${item.cognitiveSignal.hypothesis}`);
+    lines.push(`- 内容角度：${item.cognitiveSignal.contentAngle}`);
+  }
+  return lines.join("\n");
 }

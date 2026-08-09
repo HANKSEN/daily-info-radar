@@ -16,6 +16,7 @@ export type StoragePaths = {
   analyzed: string;
   briefJson: string;
   briefMarkdown: string;
+  productionMarkdown: string;
 };
 
 export async function ensureStorage(dataDir: string): Promise<void> {
@@ -24,6 +25,7 @@ export async function ensureStorage(dataDir: string): Promise<void> {
     "candidates",
     "briefs/json",
     "briefs/markdown",
+    "briefs/production",
     "cache",
     "logs",
     "state",
@@ -40,6 +42,7 @@ export function dailyPaths(dataDir: string, date: string): StoragePaths {
     analyzed: path.join(dataDir, "candidates", `${date}.analyzed.json`),
     briefJson: path.join(dataDir, "briefs", "json", `${date}.json`),
     briefMarkdown: path.join(dataDir, "briefs", "markdown", `${date}.md`),
+    productionMarkdown: path.join(dataDir, "briefs", "production", `${date}.md`),
   };
 }
 
@@ -54,6 +57,7 @@ export async function writeDailyArtifacts(input: {
   analyzed: AnalyzedArticle[];
   brief: DailyBrief;
   markdown: string;
+  productionMarkdown: string;
 }): Promise<StoragePaths> {
   await ensureStorage(input.dataDir);
   const paths = dailyPaths(input.dataDir, input.date);
@@ -63,6 +67,7 @@ export async function writeDailyArtifacts(input: {
   await writeJson(paths.analyzed, input.analyzed);
   await writeJson(paths.briefJson, input.brief);
   await writeFile(paths.briefMarkdown, input.markdown, "utf8");
+  await writeFile(paths.productionMarkdown, input.productionMarkdown, "utf8");
   await writeJson(path.join(input.dataDir, "state", "latest.json"), {
     date: input.date,
     paths,

@@ -35,11 +35,15 @@ function repoRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
-test("package exposes sources and sources:check scripts", async () => {
+test("package exposes source, setup, verification, and scheduler scripts", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
   assert.equal(packageJson.scripts.sources, "node --experimental-strip-types src/cli.ts sources");
   assert.equal(packageJson.scripts["sources:check"], "node --experimental-strip-types src/cli.ts sources:check");
+  assert.equal(packageJson.scripts.setup, "node --experimental-strip-types src/cli.ts setup");
+  assert.equal(packageJson.scripts["setup:check"], "node --experimental-strip-types src/cli.ts setup:check");
+  assert.match(packageJson.scripts.verify, /src\/cli\.ts verify/u);
+  assert.equal(packageJson.scripts["scheduler:install"], "node --experimental-strip-types src/cli.ts scheduler:install");
 });
 
 test("checkSources reports RSS fallback health when primary URL fails", async () => {

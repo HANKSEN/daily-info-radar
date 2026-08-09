@@ -12,6 +12,24 @@ export type ContentType =
 
 export type UseTag = "值得深读" | "持续关注" | "可做选题" | "市场信号";
 
+export type CognitiveTag =
+  | "判断更新"
+  | "能力增强"
+  | "行动线索"
+  | "创作素材"
+  | "趋势信号"
+  | "系统优化";
+
+export type ReadingPriority = "精读" | "扫读" | "追踪" | "跳过";
+
+export type CognitiveSignal = {
+  score: 1 | 2 | 3 | 4 | 5;
+  priority: ReadingPriority;
+  tags: CognitiveTag[];
+  hypothesis: string;
+  contentAngle: string;
+};
+
 export type SourceKind = "rss" | "api" | "scrape" | "fixture";
 
 export type SourceConfig = {
@@ -82,6 +100,7 @@ export type AnalyzedArticle = ArticleCandidate & {
   valueScore: 1 | 2 | 3 | 4 | 5;
   selected: boolean;
   recommendationReason: string;
+  cognitiveSignal?: CognitiveSignal;
 };
 
 export type MarketSnapshot = {
