@@ -35,6 +35,10 @@ RADAR_AI_MODE=openai
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
 RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 ```
 
 没有 API Key 时可以先设置 `RADAR_AI_MODE=heuristic`。修改时间后必须重新运行 `npm run scheduler:install`。
@@ -124,6 +128,16 @@ npm run bot -- --dry-run
 
 确认飞书收到可点击原文的消息卡片。真实日报、token 日志和状态都在仓库外的数据目录。
 
+定时任务实际调用 `npm run daily:scheduled`。它会在采集、AI 分析或发送失败时记录故障，并尽力通过同一机器人发送告警。收到告警后可以直接回复：
+
+- `余额已补充，重新推送今天的资讯`
+- `现在重新试一次`
+- `检查信息源`
+- `查看今日候选资讯`
+- `查看处理指引`
+
+机器人只接受白名单用户触发这些操作。密钥配置问题只能给出安全处理指引，不允许用户把密钥发给机器人。
+
 ## 7. 可选：Obsidian
 
 ```dotenv
@@ -169,4 +183,4 @@ npm run scheduler:status
 
 `setup:check` 中的 `pipelineReady`、`deliveryReady`、`interactionReady`、`automationReady` 应全部为 `true`。
 
-日志位于外部数据目录的 `logs/`：macOS 使用 `launchd-*.log`，Windows 使用 `task-scheduler-*.log`，每日 token 消耗记录在 `daily-runs.jsonl`。
+日志位于外部数据目录的 `logs/`：macOS 使用 `launchd-*.log`，Windows 使用 `task-scheduler-*.log`，每日 token 消耗记录在 `daily-runs.jsonl`，告警与恢复记录在 `incidents.jsonl`。

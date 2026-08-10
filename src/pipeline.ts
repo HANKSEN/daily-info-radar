@@ -6,6 +6,7 @@ import type {
   PipelineResult,
   RuntimeConfig,
   SourceItem,
+  SourceHealth,
 } from "./types.ts";
 import { analyzeCandidatesHeuristically } from "./ai/heuristic.ts";
 import { analyzeCandidatesWithOpenAI } from "./ai/openaiCompatible.ts";
@@ -20,6 +21,7 @@ import { renderDailyBriefMarkdown } from "./renderers/markdown.ts";
 import { renderCognitiveProductionMarkdown } from "./renderers/production.ts";
 import { fairSampleCandidates } from "./sampling.ts";
 import { appendDailyRunLog, writeDailyArtifacts } from "./storage.ts";
+import { sourceOperationalError } from "./operationalError.ts";
 
 export type RunDailyPipelineOptions = {
   repoRoot: string;
@@ -32,6 +34,7 @@ export type RunDailyPipelineOptions = {
   maxPerSource?: number;
   sourceItems?: SourceItem[];
   marketSnapshots?: MarketSnapshot[];
+  sourceHealth?: SourceHealth;
   dryRun?: boolean;
   config?: RuntimeConfig;
   sourceEnv?: Record<string, string | undefined>;
@@ -47,9 +50,18 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
   const maxPerSource = options.maxPerSource ?? options.config?.maxPerSource ?? 8;
 
   const inputs = await resolveInputs(options);
+  if (inputs.sourceItems.length === 0) {
+    throw sourceOperationalError("NO_AVAILABLE_SOURCES", inputs.sourceHealth);
+  }
   const candidates = buildCandidates(inputs.sourceItems, { candidatePoolMax, maxPerSource, now });
+  if (candidates.length === 0) {
+    throw sourceOperationalError("NO_FRESH_CANDIDATES", inputs.sourceHealth);
+  }
   const analysis = await analyzeCandidates(candidates, options);
   const items = rankArticles(analysis.articles, { minItems, maxItems });
+  if (items.length === 0) {
+    throw sourceOperationalError("NO_QUALIFIED_ITEMS", inputs.sourceHealth);
+  }
 
   const brief = {
     date,
@@ -73,6 +85,7 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
     productionMarkdown,
   });
   await appendDailyRunLog(options.dataDir, {
+    status: "success",
     date,
     generatedAt: brief.generatedAt,
     aiMode: resolveAiMode(options),
@@ -84,9 +97,10 @@ export async function runDailyPipeline(options: RunDailyPipelineOptions): Promis
     candidateCount: candidates.length,
     selectedItemCount: items.length,
     briefMarkdown: paths.briefMarkdown,
+    sourceHealth: inputs.sourceHealth,
   });
 
-  return { brief, paths };
+  return { brief, paths, sourceHealth: inputs.sourceHealth };
 }
 
 export function buildCandidates(
@@ -124,11 +138,20 @@ function isPublishedWithinWindow(
 async function resolveInputs(options: RunDailyPipelineOptions): Promise<{
   sourceItems: SourceItem[];
   marketSnapshots: MarketSnapshot[];
+  sourceHealth: SourceHealth;
 }> {
   if (options.sourceItems && options.marketSnapshots) {
+    const sourceIds = new Set(options.sourceItems.map((item) => item.sourceId));
     return {
       sourceItems: options.sourceItems,
       marketSnapshots: options.marketSnapshots,
+      sourceHealth: options.sourceHealth ?? {
+        configured: sourceIds.size,
+        succeeded: sourceIds.size,
+        failed: 0,
+        itemCount: options.sourceItems.length,
+        failures: [],
+      },
     };
   }
 

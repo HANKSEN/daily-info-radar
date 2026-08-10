@@ -60,3 +60,9 @@ test("Windows installer enables missed-run recovery, wake, and bot restart", asy
   assert.match(script, /RunOnlyIfNetworkAvailable/u);
   assert.match(script, /LogonType Interactive/u);
 });
+
+test("Windows daily wrapper uses the alert-aware scheduled command", async () => {
+  const script = await readFile(new URL("../scripts/windows/daily.ps1", import.meta.url), "utf8");
+  assert.match(script, /daily:scheduled/u);
+  assert.doesNotMatch(script, /send:latest/u);
+});

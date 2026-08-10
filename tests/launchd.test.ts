@@ -19,6 +19,8 @@ test("renderLaunchdPlists creates daily and bot launchd templates", () => {
   assert.match(plists.daily, /<key>StartCalendarInterval<\/key>/);
   assert.match(plists.daily, /\/opt\/homebrew\/bin:\/usr\/local\/bin/);
   assert.match(plists.daily, /<key>LARK_CLI_NO_PROXY<\/key>/);
+  assert.match(plists.daily, /daily:scheduled/u);
+  assert.doesNotMatch(plists.daily, /send:latest/u);
   assert.match(plists.bot, /com\.hanksen\.daily-info-radar\.bot/);
   assert.match(plists.bot, /<key>KeepAlive<\/key>/);
   assert.match(plists.bot, /<key>PATH<\/key>/);

@@ -23,7 +23,7 @@ It is designed for researchers, creators, product builders, investors, and engin
 - OpenAI-compatible analysis mode or local heuristic mode.
 - Cognitive production view with reading priority, cognitive-increment hypotheses, and creation angles.
 - Lark/Feishu push using interactive message cards with clickable article links.
-- Bot commands: `帮助`, `状态`, `重发日报`, `收藏第3条`, `加入待读 3 5`.
+- Bot commands: `帮助`, `状态`, `为什么今天没有推送`, `查询余额`, `重发日报`, `收藏第3条`, and `加入待读 3 5`. Status and DeepSeek balance queries use deterministic local logic and consume no model tokens.
 - Obsidian reading-list integration.
 - macOS launchd and Windows Task Scheduler support, plus a long-running bot event listener.
 - Daily run logs with model mode, model name, token usage, source count, candidate count, and selected item count.
@@ -64,7 +64,11 @@ RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
-RADAR_DAILY_MINUTE=30
+RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 
 LARK_CHAT_ID=oc_xxx
 LARK_ALLOWED_CHAT_IDS=oc_xxx
@@ -157,6 +161,10 @@ Run the bot event listener:
 npm run bot
 ```
 
+Scheduled jobs use `npm run daily:scheduled` to collect, analyze, and deliver in one alert-aware workflow. When a blocking stage fails, the bot sends an incident card with a natural-language recovery prompt. Supported replies include `重新生成今天的资讯`, `检查信息源`, `查看今日候选资讯`, and `查看处理指引`.
+
+`重发日报` only resends an existing brief, while `重新生成今天的资讯` reruns the complete workflow. Optional source failures are logged without alerts by default. Never send API keys, App Secrets, or a complete `.env` file through Feishu.
+
 Install and load cross-platform scheduled jobs:
 
 ```bash
@@ -189,7 +197,9 @@ It contains:
 - `briefs/markdown/` regular Markdown briefs
 - `briefs/production/` cognitive production Markdown for deep reading, insight cards, and content creation
 - `logs/daily-runs.jsonl` daily run and token usage logs
+- `logs/incidents.jsonl` incident and recovery history
 - `state/` latest brief, latest run status, and event dedupe state
+- `dry-run/` and `verification/` isolated test artifacts that do not replace production state
 
 Do not commit this directory.
 

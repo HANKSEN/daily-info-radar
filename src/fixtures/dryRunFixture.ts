@@ -8,6 +8,10 @@ export function createDryRunFixture(): {
   return {
     marketSnapshots: MARKET_WATCHLIST.map((asset, index) => ({
       ...asset,
+      sourceName: "Yahoo Finance",
+      sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(asset.symbol)}`,
+      fetchedAt: "2026-06-13T00:30:00.000Z",
+      asOf: "2026-06-12T20:00:00.000Z",
       changePercent: Number(((index % 2 === 0 ? 1 : -1) * (0.12 + index / 100)).toFixed(2)),
       status: "ok",
     })),

@@ -33,3 +33,5 @@ npm run setup:check
 ```
 
 只处理返回结果中未通过的阶段。`npm run setup`、scheduler 安装和飞书发送都设计为可重复执行；`.env` 不会被 setup 覆盖，日报发送默认使用日期幂等键。
+
+定时任务必须指向 `npm run daily:scheduled`，以启用失败日志、飞书告警和自然语言恢复。更新旧版本后重新运行 `npm run scheduler:install`。不要通过机器人收集密钥；鉴权问题只提供安全处理指引。

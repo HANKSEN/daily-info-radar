@@ -23,7 +23,7 @@ Daily Info Radar 是一个面向 AI、科技与市场信息的每日资讯雷达
 - AI 分析或本地规则分析：OpenAI-compatible API 模式与 heuristic 模式可切换。
 - 认知生产线视图：为每条精选信息生成认知优先级、增量假设和内容角度。
 - 飞书推送：默认使用飞书消息卡片，文章标题可点击打开原文。
-- 机器人交互：支持「帮助」「状态」「重发日报」「收藏第3条」「加入待读 3 5」。
+- 机器人交互：支持「帮助」「状态」「为什么今天没有推送」「查询余额」「重发日报」「收藏第3条」「加入待读 3 5」。状态与 DeepSeek 余额查询由本地确定性逻辑处理，不消耗模型 token。
 - Obsidian 待读：可把日报条目追加到本地 Markdown 清单。
 - 定时运行：macOS launchd 与 Windows Task Scheduler 每日定时推送，另有常驻机器人事件监听。
 - 运行日志：记录每日运行状态、模型模式、模型名、token usage、候选数和精选条目数。
@@ -68,7 +68,11 @@ RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
-RADAR_DAILY_MINUTE=30
+RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 
 LARK_CHAT_ID=oc_xxx
 LARK_ALLOWED_CHAT_IDS=oc_xxx
@@ -161,6 +165,16 @@ npm run obsidian:add -- --item 3
 npm run bot
 ```
 
+定时任务使用 `npm run daily:scheduled` 统一完成采集、AI 分析和飞书发送。关键步骤失败时，机器人会发送告警卡片并提供可直接回复的自然语言建议，例如：
+
+- `余额已补充，重新推送今天的资讯`
+- `现在重新试一次`
+- `检查信息源`
+- `查看今日候选资讯`
+- `查看处理指引`
+
+`重发日报` 只重新发送已有日报；“重新生成今天的资讯”会重新执行完整流程。默认仅对阻断性故障告警，少量非关键源失败只写日志。不要通过飞书发送 API Key、App Secret 或完整 `.env`。
+
 跨平台安装并加载定时任务：
 
 ```bash
@@ -193,7 +207,9 @@ npm run scheduler:uninstall
 - `briefs/markdown/` 普通 Markdown 日报
 - `briefs/production/` 认知生产线 Markdown，用于精读、认知卡片和创作输出
 - `logs/daily-runs.jsonl` 每日运行与 token 日志
+- `logs/incidents.jsonl` 告警与恢复记录
 - `state/` 最新日报、最新运行状态、事件去重状态
+- `dry-run/`、`verification/` 测试与验收产物，不覆盖生产状态
 
 不要把该目录提交到 GitHub。
 

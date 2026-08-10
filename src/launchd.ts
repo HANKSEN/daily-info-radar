@@ -34,7 +34,7 @@ export function renderLaunchdPlists(options: LaunchdOptions): {
       repoRoot: options.repoRoot,
       dataDir: options.dataDir,
       nodePath: options.nodePath,
-      args: ["src/cli.ts", "daily", "&&", "src/cli.ts", "send:latest"],
+      args: ["src/cli.ts", "daily:scheduled"],
       calendar: { hour: options.hour, minute: options.minute },
       logName: "launchd-daily",
     }),
@@ -110,7 +110,7 @@ function renderPlist(input: {
       ? [
           "/bin/zsh",
           "-lc",
-          `cd ${shellQuote(input.repoRoot)} && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts daily && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts send:latest`,
+          `cd ${shellQuote(input.repoRoot)} && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts daily:scheduled`,
         ]
       : [
           input.nodePath,

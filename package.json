@@ -14,6 +14,7 @@
     "setup:check": "node --experimental-strip-types src/cli.ts setup:check",
     "verify": "npm test && node --experimental-strip-types src/cli.ts verify",
     "daily": "node --experimental-strip-types src/cli.ts daily",
+    "daily:scheduled": "node --experimental-strip-types src/cli.ts daily:scheduled",
     "daily:dry": "node --experimental-strip-types src/cli.ts daily --dry-run",
     "collect": "node --experimental-strip-types src/cli.ts collect",
     "analyze": "node --experimental-strip-types src/cli.ts analyze",

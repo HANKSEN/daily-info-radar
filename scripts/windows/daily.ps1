@@ -13,16 +13,9 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 Push-Location $RepoRoot
 try {
-  & $NodePath --experimental-strip-types $cliPath daily *>> $logPath
-  $dailyExit = $LASTEXITCODE
-  if ($dailyExit -ne 0) {
-    exit $dailyExit
-  }
-
-  & $NodePath --experimental-strip-types $cliPath send:latest *>> $logPath
+  & $NodePath --experimental-strip-types $cliPath daily:scheduled *>> $logPath
   exit $LASTEXITCODE
 }
 finally {
   Pop-Location
 }
-

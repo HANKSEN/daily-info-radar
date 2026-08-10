@@ -61,12 +61,65 @@ export type RuntimeConfig = {
     apiKey?: string;
     model?: string;
   };
+  alerts: {
+    enabled: boolean;
+    minHealthySources: number;
+    maxSourceFailureRatio: number;
+    alertOnPartialSourceFailure: boolean;
+  };
 };
 
 export type ModelUsage = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+};
+
+export type OperationalStage = "collect" | "analyze" | "render" | "deliver" | "unknown";
+
+export type IncidentCode =
+  | "AI_INSUFFICIENT_BALANCE"
+  | "AI_AUTH_FAILED"
+  | "AI_RATE_LIMITED"
+  | "AI_TIMEOUT"
+  | "AI_UNAVAILABLE"
+  | "NO_AVAILABLE_SOURCES"
+  | "NO_FRESH_CANDIDATES"
+  | "NO_QUALIFIED_ITEMS"
+  | "SOURCE_HEALTH_DEGRADED"
+  | "DELIVERY_FAILED"
+  | "UNKNOWN_FAILURE";
+
+export type SourceFailure = {
+  sourceId: string;
+  sourceName: string;
+  reason: string;
+};
+
+export type SourceHealth = {
+  configured: number;
+  succeeded: number;
+  failed: number;
+  itemCount: number;
+  failures: SourceFailure[];
+};
+
+export type DailyIncident = {
+  id: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+  status: "open" | "resolved";
+  severity: "failure" | "warning";
+  stage: OperationalStage;
+  code: IncidentCode;
+  title: string;
+  message: string;
+  suggestion: string;
+  retryable: boolean;
+  alertSent: boolean;
+  alertError?: string;
+  sourceHealth?: SourceHealth;
 };
 
 export type SourceItem = {
@@ -107,6 +160,12 @@ export type MarketSnapshot = {
   symbol: string;
   name: string;
   group?: "index" | "tech_stock" | "china_hk_stock" | "macro";
+  region?: "us" | "cn" | "hk" | "other";
+  cardVisible?: boolean;
+  sourceName?: string;
+  sourceUrl?: string;
+  fetchedAt?: string;
+  asOf?: string;
   changePercent?: number;
   status: "ok" | "unavailable";
   note?: string;
@@ -122,6 +181,7 @@ export type DailyBrief = {
 };
 
 export type DailyRunLogEntry = {
+  status?: "success" | "failed";
   date: string;
   generatedAt: string;
   aiMode: RuntimeConfig["ai"]["mode"];
@@ -132,16 +192,23 @@ export type DailyRunLogEntry = {
   sourceCount: number;
   candidateCount: number;
   selectedItemCount: number;
-  briefMarkdown: string;
+  briefMarkdown?: string;
+  stage?: OperationalStage;
+  errorCode?: IncidentCode;
+  errorMessage?: string;
+  alertSent?: boolean;
+  sourceHealth?: SourceHealth;
 };
 
 export type PipelineResult = {
   brief: DailyBrief;
+  sourceHealth: SourceHealth;
   paths: {
     raw: string;
     candidates: string;
     analyzed: string;
     briefJson: string;
     briefMarkdown: string;
+    productionMarkdown: string;
   };
 };

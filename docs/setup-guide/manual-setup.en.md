@@ -35,6 +35,10 @@ RADAR_AI_MODE=openai
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
 RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 ```
 
 Use `RADAR_AI_MODE=heuristic` to run without an external model. Reinstall the scheduler after changing the time.
@@ -80,6 +84,8 @@ npm run send:latest -- --force
 npm run bot -- --dry-run
 ```
 
+The scheduler runs `npm run daily:scheduled`, which records collection, AI, and delivery failures and attempts to send an incident card through the same bot. Allowlisted users can reply in natural language with `重新生成今天的资讯`, `检查信息源`, `查看今日候选资讯`, or `查看处理指引`. Secrets must never be sent to the bot.
+
 ## 7. Install automation
 
 ```bash
@@ -103,4 +109,4 @@ npm run setup:check
 npm run scheduler:status
 ```
 
-`pipelineReady`, `deliveryReady`, `interactionReady`, and `automationReady` should all be `true`. Runtime and token logs are stored under the external data directory's `logs/` folder.
+`pipelineReady`, `deliveryReady`, `interactionReady`, and `automationReady` should all be `true`. Runtime and token logs are stored under the external data directory's `logs/` folder; incident history is stored in `incidents.jsonl`.

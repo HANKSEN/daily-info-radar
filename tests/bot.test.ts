@@ -15,7 +15,18 @@ test("parseBotCommand recognizes collect commands", () => {
 
 test("parseBotCommand recognizes utility commands", () => {
   assert.deepEqual(parseBotCommand("重发日报"), { type: "resend" });
+  assert.deepEqual(parseBotCommand("余额已补充，重新推送今天的资讯"), { type: "retryDaily" });
+  assert.deepEqual(parseBotCommand("现在重新试一次"), { type: "retryDaily" });
+  assert.deepEqual(parseBotCommand("使用可用信源继续生成"), { type: "retryDaily" });
+  assert.deepEqual(parseBotCommand("检查信息源"), { type: "checkSources" });
+  assert.deepEqual(parseBotCommand("查看今日候选资讯"), { type: "viewCandidates" });
+  assert.deepEqual(parseBotCommand("查看处理指引"), { type: "failureHelp" });
+  assert.deepEqual(parseBotCommand("查询余额"), { type: "balance" });
+  assert.deepEqual(parseBotCommand("DeepSeek 还能用吗"), { type: "balance" });
+  assert.deepEqual(parseBotCommand("API 余额还有多少"), { type: "balance" });
   assert.deepEqual(parseBotCommand("状态"), { type: "status" });
+  assert.deepEqual(parseBotCommand("运行情况"), { type: "status" });
+  assert.deepEqual(parseBotCommand("为什么今天没有推送"), { type: "status" });
   assert.deepEqual(parseBotCommand("帮助"), { type: "help" });
   assert.deepEqual(parseBotCommand("随便聊聊"), { type: "unknown" });
 });

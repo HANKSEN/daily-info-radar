@@ -1,4 +1,5 @@
 import type { AnalyzedArticle, DailyBrief, Domain, MarketSnapshot } from "../types.ts";
+import { formatDateTimeInTimezone } from "../date.ts";
 
 const DOMAIN_LABELS: Record<Domain, string> = {
   ai: "AI",
@@ -11,7 +12,7 @@ export function renderDailyBriefMarkdown(brief: DailyBrief): string {
 
   lines.push(`# 每日信息雷达 - ${brief.date}`);
   lines.push("");
-  lines.push(`生成时间：${brief.generatedAt}`);
+  lines.push(`生成时间：${formatDateTimeInTimezone(brief.generatedAt)}`);
   lines.push("");
   lines.push("## 市场快照");
   lines.push("");

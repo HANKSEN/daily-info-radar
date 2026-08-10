@@ -9,54 +9,73 @@ import type {
   UseTag,
 } from "../types.ts";
 import { normalizeCognitiveSignal } from "../cognitive.ts";
+import {
+  aiResponseError,
+  aiTransportError,
+  RadarOperationalError,
+} from "../operationalError.ts";
 
 export async function analyzeCandidatesWithOpenAI(
   candidates: ArticleCandidate[],
   config: RuntimeConfig,
 ): Promise<{ articles: AnalyzedArticle[]; usage?: ModelUsage }> {
   if (!config.ai.baseUrl || !config.ai.apiKey || !config.ai.model) {
-    throw new Error(
-      "Missing AI_BASE_URL, AI_API_KEY or AI_MODEL. Use npm run daily:dry for local validation.",
+    throw new RadarOperationalError(
+      "AI_AUTH_FAILED",
+      "analyze",
+      "AI API 配置不完整",
+      "请不要在飞书中发送密钥。直接回复我“查看处理指引”，我会告诉你如何安全联系维护者处理。",
+      false,
     );
   }
 
-  const response = await fetch(`${config.ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.ai.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.ai.model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You select high-signal AI, technology, and market information for a Chinese daily brief. Return strict compact JSON only. Do not include markdown or prose.",
-        },
-        {
-          role: "user",
-          content: buildPrompt(candidates),
-        },
-      ],
-    }),
-    signal: AbortSignal.timeout(60000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI request failed: ${response.status} ${await response.text()}`);
+  let response: Response;
+  try {
+    response = await fetch(`${config.ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.ai.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.ai.model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You select high-signal AI, technology, and market information for a Chinese daily brief. Return strict compact JSON only. Do not include markdown or prose.",
+          },
+          {
+            role: "user",
+            content: buildPrompt(candidates),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch (error) {
+    throw aiTransportError(error);
   }
 
-  const payload = await response.json() as {
+  if (!response.ok) {
+    throw aiResponseError(response.status, await response.text());
+  }
+
+  let payload: {
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   };
+  try {
+    payload = await response.json() as typeof payload;
+  } catch (error) {
+    throw invalidAiResponse(error);
+  }
   const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error("AI response did not include message content.");
+  if (!content) throw invalidAiResponse();
 
-  const parsed = JSON.parse(extractJson(content)) as {
+  let parsed: {
     items: Array<{
       index: number;
       domain: Domain;
@@ -68,6 +87,12 @@ export async function analyzeCandidatesWithOpenAI(
       cognitiveSignal?: Partial<CognitiveSignal>;
     }>;
   };
+  try {
+    parsed = JSON.parse(extractJson(content)) as typeof parsed;
+    if (!Array.isArray(parsed.items)) throw new Error("missing items");
+  } catch (error) {
+    throw invalidAiResponse(error);
+  }
   const articles = parsed.items.map((item) => {
     const candidate = candidates[item.index - 1];
     if (!candidate) throw new Error(`AI response referenced unknown candidate index: ${item.index}`);
@@ -99,6 +124,17 @@ export async function analyzeCandidatesWithOpenAI(
         }
       : undefined,
   };
+}
+
+function invalidAiResponse(cause?: unknown): RadarOperationalError {
+  return new RadarOperationalError(
+    "AI_UNAVAILABLE",
+    "analyze",
+    "AI 返回内容格式异常",
+    "直接回复我“重新生成今天的资讯”，我会再次尝试。",
+    true,
+    { cause },
+  );
 }
 
 function buildPrompt(candidates: ArticleCandidate[]): string {

@@ -52,6 +52,7 @@ export async function writeDailyArtifacts(input: {
   raw: {
     sourceItems: SourceItem[];
     marketSnapshots: MarketSnapshot[];
+    sourceHealth?: import("./types.ts").SourceHealth;
   };
   candidates: ArticleCandidate[];
   analyzed: AnalyzedArticle[];

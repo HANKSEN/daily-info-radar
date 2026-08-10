@@ -43,6 +43,7 @@ test("package exposes source, setup, verification, and scheduler scripts", async
   assert.equal(packageJson.scripts.setup, "node --experimental-strip-types src/cli.ts setup");
   assert.equal(packageJson.scripts["setup:check"], "node --experimental-strip-types src/cli.ts setup:check");
   assert.match(packageJson.scripts.verify, /src\/cli\.ts verify/u);
+  assert.equal(packageJson.scripts["daily:scheduled"], "node --experimental-strip-types src/cli.ts daily:scheduled");
   assert.equal(packageJson.scripts["scheduler:install"], "node --experimental-strip-types src/cli.ts scheduler:install");
 });
 

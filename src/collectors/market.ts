@@ -8,28 +8,33 @@ export const MARKET_WATCHLIST: Array<{
   symbol: string;
   name: string;
   group: NonNullable<MarketSnapshot["group"]>;
+  region: NonNullable<MarketSnapshot["region"]>;
+  cardVisible?: boolean;
 }> = [
-  { symbol: "^NDX", name: "纳斯达克 100", group: "index" },
-  { symbol: "^GSPC", name: "标普 500", group: "index" },
-  { symbol: "000300.SS", name: "沪深 300", group: "index" },
-  { symbol: "000001.SS", name: "上证指数", group: "index" },
-  { symbol: "399006.SZ", name: "创业板指", group: "index" },
-  { symbol: "NVDA", name: "英伟达", group: "tech_stock" },
-  { symbol: "MSFT", name: "微软", group: "tech_stock" },
-  { symbol: "AAPL", name: "苹果", group: "tech_stock" },
-  { symbol: "GOOGL", name: "Alphabet", group: "tech_stock" },
-  { symbol: "META", name: "Meta", group: "tech_stock" },
-  { symbol: "TSLA", name: "特斯拉", group: "tech_stock" },
-  { symbol: "BABA", name: "阿里巴巴 ADR", group: "china_hk_stock" },
-  { symbol: "BIDU", name: "百度 ADR", group: "china_hk_stock" },
-  { symbol: "JD", name: "京东 ADR", group: "china_hk_stock" },
-  { symbol: "0700.HK", name: "腾讯控股", group: "china_hk_stock" },
-  { symbol: "3690.HK", name: "美团", group: "china_hk_stock" },
-  { symbol: "BTC-USD", name: "比特币", group: "macro" },
-  { symbol: "ETH-USD", name: "以太坊", group: "macro" },
-  { symbol: "CL=F", name: "WTI 原油", group: "macro" },
-  { symbol: "GC=F", name: "黄金", group: "macro" },
-  { symbol: "DX-Y.NYB", name: "美元指数", group: "macro" },
+  { symbol: "QQQM", name: "纳斯达克 100 ETF（QQQM）", group: "index", region: "us" },
+  { symbol: "^GSPC", name: "标普 500", group: "index", region: "us" },
+  { symbol: "^DJI", name: "道琼指数", group: "index", region: "us" },
+  { symbol: "000001.SS", name: "上证指数", group: "index", region: "cn" },
+  { symbol: "000300.SS", name: "沪深 300", group: "index", region: "cn" },
+  { symbol: "399006.SZ", name: "创业板指", group: "index", region: "cn" },
+  { symbol: "^HSI", name: "恒生指数", group: "index", region: "hk" },
+  { symbol: "NVDA", name: "英伟达", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "MSFT", name: "微软", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "AAPL", name: "苹果", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "GOOGL", name: "Alphabet", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "META", name: "Meta", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "TSLA", name: "特斯拉", group: "tech_stock", region: "us", cardVisible: false },
+  { symbol: "BABA", name: "阿里巴巴 ADR", group: "china_hk_stock", region: "us", cardVisible: false },
+  { symbol: "BIDU", name: "百度 ADR", group: "china_hk_stock", region: "us", cardVisible: false },
+  { symbol: "JD", name: "京东 ADR", group: "china_hk_stock", region: "us", cardVisible: false },
+  { symbol: "0700.HK", name: "腾讯控股", group: "china_hk_stock", region: "hk" },
+  { symbol: "3690.HK", name: "美团", group: "china_hk_stock", region: "hk" },
+  { symbol: "BTC-USD", name: "比特币", group: "macro", region: "other" },
+  { symbol: "ETH-USD", name: "以太坊", group: "macro", region: "other" },
+  { symbol: "GC=F", name: "黄金", group: "macro", region: "other" },
+  { symbol: "SI=F", name: "白银", group: "macro", region: "other" },
+  { symbol: "CL=F", name: "WTI 原油", group: "macro", region: "other" },
+  { symbol: "DX-Y.NYB", name: "美元指数", group: "macro", region: "other" },
 ];
 
 export async function collectMarketSnapshots(): Promise<MarketSnapshot[]> {
@@ -44,6 +49,8 @@ export async function fetchYahooSnapshot(market: {
   symbol: string;
   name: string;
   group: NonNullable<MarketSnapshot["group"]>;
+  region?: MarketSnapshot["region"];
+  cardVisible?: boolean;
 }): Promise<MarketSnapshot> {
   try {
     const encoded = encodeURIComponent(market.symbol);
@@ -53,9 +60,10 @@ export async function fetchYahooSnapshot(market: {
         result?: Array<{
           meta?: {
             regularMarketPrice?: number;
-            previousClose?: number;
+            regularMarketTime?: number;
             chartPreviousClose?: number;
           };
+          timestamp?: number[];
           indicators?: {
             quote?: Array<{
               close?: Array<number | null>;
@@ -66,17 +74,34 @@ export async function fetchYahooSnapshot(market: {
     };
     const result = payload.chart?.result?.[0];
     const meta = result?.meta;
-    const closes = result?.indicators?.quote?.[0]?.close?.filter((close): close is number => typeof close === "number") ?? [];
-    const price = meta?.regularMarketPrice ?? closes.at(-1);
-    const previous = meta?.previousClose ?? meta?.chartPreviousClose ?? closes.at(-2);
-    if (typeof price !== "number" || typeof previous !== "number" || previous === 0) {
+    const closes = result?.indicators?.quote?.[0]?.close ?? [];
+    const timestamps = result?.timestamp ?? [];
+    const completedPoints = closes
+      .map((close, index) => ({ close, timestamp: timestamps[index] }))
+      .filter((point): point is { close: number; timestamp: number | undefined } =>
+        typeof point.close === "number"
+      );
+    const latest = completedPoints.at(-1);
+    const previous = completedPoints.at(-2);
+    const price = meta?.regularMarketPrice ?? latest?.close;
+    const previousPrice = completedPoints.length >= 2
+      ? previous?.close
+      : meta?.chartPreviousClose;
+    if (typeof price !== "number" || typeof previousPrice !== "number" || previousPrice === 0) {
       throw new Error("missing price data");
     }
+    const asOfSeconds = meta?.regularMarketTime ?? latest?.timestamp;
     return {
       symbol: market.symbol,
       name: market.name,
       group: market.group,
-      changePercent: ((price - previous) / previous) * 100,
+      region: market.region,
+      cardVisible: market.cardVisible,
+      sourceName: "Yahoo Finance",
+      sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(market.symbol)}`,
+      fetchedAt: new Date().toISOString(),
+      asOf: typeof asOfSeconds === "number" ? new Date(asOfSeconds * 1000).toISOString() : undefined,
+      changePercent: ((price - previousPrice) / previousPrice) * 100,
       status: "ok",
     };
   } catch (error) {
@@ -84,6 +109,11 @@ export async function fetchYahooSnapshot(market: {
       symbol: market.symbol,
       name: market.name,
       group: market.group,
+      region: market.region,
+      cardVisible: market.cardVisible,
+      sourceName: "Yahoo Finance",
+      sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(market.symbol)}`,
+      fetchedAt: new Date().toISOString(),
       status: "unavailable",
       note: error instanceof Error ? error.message : "unknown error",
     };
