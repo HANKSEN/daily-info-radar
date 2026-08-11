@@ -15,6 +15,24 @@ import {
   RadarOperationalError,
 } from "../operationalError.ts";
 
+type AiPayload = {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+};
+
+type ParsedAiResponse = {
+  items: Array<{
+    index: number;
+    domain: Domain;
+    contentType: ContentType;
+    useTags: UseTag[];
+    valueScore: 1 | 2 | 3 | 4 | 5;
+    selected: boolean;
+    recommendationReason: string;
+    cognitiveSignal?: Partial<CognitiveSignal>;
+  }>;
+};
+
 export async function analyzeCandidatesWithOpenAI(
   candidates: ArticleCandidate[],
   config: RuntimeConfig,
@@ -29,9 +47,26 @@ export async function analyzeCandidatesWithOpenAI(
     );
   }
 
+  let lastFormatError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const payload = await requestAnalysis(candidates, config, attempt);
+    try {
+      return parseAnalysisPayload(payload, candidates);
+    } catch (error) {
+      lastFormatError = error;
+    }
+  }
+  throw invalidAiResponse(lastFormatError);
+}
+
+async function requestAnalysis(
+  candidates: ArticleCandidate[],
+  config: RuntimeConfig,
+  attempt: number,
+): Promise<AiPayload> {
   let response: Response;
   try {
-    response = await fetch(`${config.ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    response = await fetch(`${config.ai.baseUrl?.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -39,13 +74,15 @@ export async function analyzeCandidatesWithOpenAI(
       },
       body: JSON.stringify({
         model: config.ai.model,
-        temperature: 0.2,
+        temperature: attempt === 0 ? 0.2 : 0,
+        max_tokens: 8192,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content:
-              "You select high-signal AI, technology, and market information for a Chinese daily brief. Return strict compact JSON only. Do not include markdown or prose.",
+            content: attempt === 0
+              ? "You select high-signal AI, technology, and market information for a Chinese daily brief. Return strict compact JSON only. Do not include markdown or prose."
+              : "Return one complete, valid, compact JSON object only. The previous attempt could not be parsed. Do not truncate the JSON and do not include markdown or prose.",
           },
           {
             role: "user",
@@ -62,37 +99,21 @@ export async function analyzeCandidatesWithOpenAI(
   if (!response.ok) {
     throw aiResponseError(response.status, await response.text());
   }
-
-  let payload: {
-    choices?: Array<{ message?: { content?: string } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-  };
   try {
-    payload = await response.json() as typeof payload;
+    return await response.json() as AiPayload;
   } catch (error) {
     throw invalidAiResponse(error);
   }
+}
+
+function parseAnalysisPayload(
+  payload: AiPayload,
+  candidates: ArticleCandidate[],
+): { articles: AnalyzedArticle[]; usage?: ModelUsage } {
   const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw invalidAiResponse();
-
-  let parsed: {
-    items: Array<{
-      index: number;
-      domain: Domain;
-      contentType: ContentType;
-      useTags: UseTag[];
-      valueScore: 1 | 2 | 3 | 4 | 5;
-      selected: boolean;
-      recommendationReason: string;
-      cognitiveSignal?: Partial<CognitiveSignal>;
-    }>;
-  };
-  try {
-    parsed = JSON.parse(extractJson(content)) as typeof parsed;
-    if (!Array.isArray(parsed.items)) throw new Error("missing items");
-  } catch (error) {
-    throw invalidAiResponse(error);
-  }
+  if (!content) throw new Error("missing response content");
+  const parsed = JSON.parse(extractJson(content)) as ParsedAiResponse;
+  if (!Array.isArray(parsed.items)) throw new Error("missing items");
   const articles = parsed.items.map((item) => {
     const candidate = candidates[item.index - 1];
     if (!candidate) throw new Error(`AI response referenced unknown candidate index: ${item.index}`);

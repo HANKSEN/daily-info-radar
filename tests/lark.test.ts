@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildLarkCliEnv, buildLarkMessageArgs, buildLarkSendArgs } from "../src/lark/send.ts";
+import {
+  buildLarkCliEnv,
+  buildLarkMessageArgs,
+  buildLarkSendArgs,
+  normalizeIdempotencyKey,
+} from "../src/lark/send.ts";
 import { renderDailyBriefLarkCard } from "../src/renderers/larkCard.ts";
 import type { DailyBrief } from "../src/types.ts";
 
@@ -51,6 +56,15 @@ test("buildLarkMessageArgs can send an interactive card", () => {
   assert.ok(args.includes("interactive"));
   assert.ok(args.includes("--content"));
   assert.doesNotThrow(() => JSON.parse(args[args.indexOf("--content") + 1]));
+});
+
+test("normalizeIdempotencyKey keeps Feishu keys within the field limit", () => {
+  const input = `daily-info-radar-alert-${"incident".repeat(12)}`;
+  const normalized = normalizeIdempotencyKey(input);
+
+  assert.equal(normalized.length, 50);
+  assert.equal(normalized, normalizeIdempotencyKey(input));
+  assert.notEqual(normalized, normalizeIdempotencyKey(`${input}-other`));
 });
 
 test("renderDailyBriefLarkCard includes clickable article links", () => {

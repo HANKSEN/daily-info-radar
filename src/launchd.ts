@@ -105,19 +105,12 @@ function renderPlist(input: {
   keepAlive?: boolean;
   logName: string;
 }): string {
-  const programArguments =
-    input.label.endsWith(".daily")
-      ? [
-          "/bin/zsh",
-          "-lc",
-          `cd ${shellQuote(input.repoRoot)} && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts daily:scheduled`,
-        ]
-      : [
-          input.nodePath,
-          "--experimental-strip-types",
-          `${input.repoRoot}/src/cli.ts`,
-          "bot",
-        ];
+  const programArguments = [
+    input.nodePath,
+    "--experimental-strip-types",
+    `${input.repoRoot}/src/cli.ts`,
+    ...input.args.slice(1),
+  ];
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -165,10 +158,6 @@ function escapeXml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 async function bootstrapLaunchdPlist(plistPath: string): Promise<void> {

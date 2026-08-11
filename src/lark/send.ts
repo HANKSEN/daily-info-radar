@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 
 export type LarkTarget =
   | { chatId: string; userId?: never }
@@ -38,8 +39,14 @@ export function buildLarkMessageArgs(options: LarkSendArgsOptions): string[] {
     ...target,
     ...content,
     "--idempotency-key",
-    options.idempotencyKey,
+    normalizeIdempotencyKey(options.idempotencyKey),
   ];
+}
+
+export function normalizeIdempotencyKey(value: string): string {
+  if (value.length <= 50) return value;
+  const digest = createHash("sha256").update(value).digest("hex").slice(0, 16);
+  return `${value.slice(0, 33)}-${digest}`;
 }
 
 export async function sendLarkMarkdown(options: LarkSendOptions): Promise<{
