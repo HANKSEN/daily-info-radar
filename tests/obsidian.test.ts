@@ -20,6 +20,8 @@ test("addBriefItemToReadingList appends a dated checklist item and avoids duplic
   assert.equal(second.status, "duplicate");
   assert.match(content, /## 2026-06-14/);
   assert.match(content, /- \[ \] \[OpenAI update\]\(https:\/\/example.com\/openai\)/);
+  assert.match(content, /认知优先级：精读 \/ 5\/5/);
+  assert.match(content, /增量假设：可能更新我对模型生态优先级的判断。/);
 
   await rm(dir, { recursive: true, force: true });
 });
@@ -45,6 +47,13 @@ function createBrief(): DailyBrief {
         valueScore: 5,
         selected: true,
         recommendationReason: "官方发布。",
+        cognitiveSignal: {
+          score: 5,
+          priority: "精读",
+          tags: ["判断更新", "创作素材"],
+          hypothesis: "可能更新我对模型生态优先级的判断。",
+          contentAngle: "拆解官方发布背后的产品影响。",
+        },
         localSignals: {
           sourceWeight: 1,
           freshnessScore: 1,

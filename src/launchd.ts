@@ -34,7 +34,7 @@ export function renderLaunchdPlists(options: LaunchdOptions): {
       repoRoot: options.repoRoot,
       dataDir: options.dataDir,
       nodePath: options.nodePath,
-      args: ["src/cli.ts", "daily", "&&", "src/cli.ts", "send:latest"],
+      args: ["src/cli.ts", "daily:scheduled"],
       calendar: { hour: options.hour, minute: options.minute },
       logName: "launchd-daily",
     }),
@@ -105,19 +105,12 @@ function renderPlist(input: {
   keepAlive?: boolean;
   logName: string;
 }): string {
-  const programArguments =
-    input.label.endsWith(".daily")
-      ? [
-          "/bin/zsh",
-          "-lc",
-          `cd ${shellQuote(input.repoRoot)} && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts daily && ${shellQuote(input.nodePath)} --experimental-strip-types src/cli.ts send:latest`,
-        ]
-      : [
-          input.nodePath,
-          "--experimental-strip-types",
-          `${input.repoRoot}/src/cli.ts`,
-          "bot",
-        ];
+  const programArguments = [
+    input.nodePath,
+    "--experimental-strip-types",
+    `${input.repoRoot}/src/cli.ts`,
+    ...input.args.slice(1),
+  ];
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -125,8 +118,6 @@ function renderPlist(input: {
 <dict>
   <key>Label</key>
   <string>${input.label}</string>
-  <key>WorkingDirectory</key>
-  <string>${input.repoRoot}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>RADAR_DATA_DIR</key>
@@ -165,10 +156,6 @@ function escapeXml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 async function bootstrapLaunchdPlist(plistPath: string): Promise<void> {

@@ -9,8 +9,14 @@ import { loadDotEnv, loadRuntimeConfig, loadSourceConfig } from "./config.ts";
 import { buildCandidates, runDailyPipeline } from "./pipeline.ts";
 import { analyzeCandidatesHeuristically } from "./ai/heuristic.ts";
 import { analyzeCandidatesWithOpenAI } from "./ai/openaiCompatible.ts";
+import {
+  queryDeepSeekBalance,
+  renderDeepSeekBalance,
+  resolveDeepSeekBalanceConfig,
+} from "./ai/deepseekBalance.ts";
 import { rankArticles } from "./rank.ts";
 import { renderDailyBriefMarkdown } from "./renderers/markdown.ts";
+import { renderCognitiveProductionMarkdown } from "./renderers/production.ts";
 import { renderDailyBriefLarkCard } from "./renderers/larkCard.ts";
 import {
   appendDailyRunLog,
@@ -35,9 +41,22 @@ import {
   unloadLaunchdPlists,
   writeLaunchdPlists,
 } from "./launchd.ts";
+import {
+  installScheduler,
+  renderSchedulerPreview,
+  schedulerStatus,
+  uninstallScheduler,
+} from "./scheduler.ts";
+import { initializeSetup, inspectSetup } from "./setup.ts";
+import { runScheduledDaily } from "./dailyRunner.ts";
+import { larkTargetFromEnv } from "./lark/target.ts";
+import { readLatestIncident } from "./incidents.ts";
+import { renderIncidentHelp } from "./renderers/larkAlertCard.ts";
+import type { ArticleCandidate, DailyRunLogEntry } from "./types.ts";
 
 const command = process.argv[2] ?? "help";
 const flags = new Set(process.argv.slice(3));
+let retryInProgress = false;
 
 try {
   await main(command, flags);
@@ -51,12 +70,72 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
   const env = await loadDotEnv(repoRoot);
   const config = loadRuntimeConfig({ repoRoot, env });
 
+  if (commandName === "setup") {
+    const initialized = await initializeSetup({ repoRoot: config.repoRoot, dataDir: config.dataDir });
+    const refreshedEnv = await loadDotEnv(repoRoot, {});
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env: refreshedEnv,
+    });
+    console.log(JSON.stringify({ ok: true, initialized, setup }, null, 2));
+    return;
+  }
+
+  if (commandName === "setup:check") {
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    console.log(JSON.stringify({ ok: true, setup }, null, 2));
+    return;
+  }
+
+  if (commandName === "verify") {
+    const sources = await loadSourceConfig(config.repoRoot, env);
+    const sourceResults = await checkSources(sources);
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    const fixture = createDryRunFixture();
+    const dryRun = await runDailyPipeline({
+      repoRoot: config.repoRoot,
+      dataDir: path.join(config.dataDir, "verification"),
+      timezone: config.timezone,
+      minItems: config.minItems,
+      maxItems: config.maxItems,
+      now: new Date("2026-06-13T00:30:00.000Z"),
+      sourceItems: fixture.sourceItems,
+      marketSnapshots: fixture.marketSnapshots,
+      dryRun: true,
+      config,
+      sourceEnv: env,
+    });
+    const sourceOkCount = sourceResults.filter((result) => result.ok).length;
+    const ok = setup.overallReady && sourceOkCount > 0;
+    console.log(JSON.stringify({
+      ok,
+      setup,
+      sources: {
+        checked: sourceResults.length,
+        okCount: sourceOkCount,
+        failed: sourceResults.filter((result) => !result.ok),
+      },
+      dryRun: { ok: true, date: dryRun.brief.date, paths: dryRun.paths },
+    }, null, 2));
+    if (!ok) process.exitCode = 2;
+    return;
+  }
+
   if (commandName === "daily") {
     const dryRun = cliFlags.has("--dry-run");
     const fixture = dryRun ? createDryRunFixture() : undefined;
     const result = await runDailyPipeline({
       repoRoot: config.repoRoot,
-      dataDir: config.dataDir,
+      dataDir: dryRun ? path.join(config.dataDir, "dry-run") : config.dataDir,
       timezone: config.timezone,
       minItems: config.minItems,
       maxItems: config.maxItems,
@@ -68,6 +147,17 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
       sourceEnv: env,
     });
     console.log(JSON.stringify({ ok: true, date: result.brief.date, paths: result.paths }, null, 2));
+    return;
+  }
+
+  if (commandName === "daily:scheduled") {
+    const result = await runScheduledDaily({ config, env });
+    console.log(JSON.stringify({
+      ok: true,
+      date: result.date,
+      briefSent: result.briefSent,
+      warningSent: result.warningSent,
+    }, null, 2));
     return;
   }
 
@@ -84,9 +174,24 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
   if (commandName === "render") {
     const brief = await readLatestBrief(config.dataDir);
     const markdown = renderDailyBriefMarkdown(brief);
+    const productionMarkdown = renderCognitiveProductionMarkdown(brief);
     const paths = dailyPaths(config.dataDir, brief.date);
     await writeFile(paths.briefMarkdown, markdown, "utf8");
-    console.log(JSON.stringify({ ok: true, markdown: paths.briefMarkdown }, null, 2));
+    await writeFile(paths.productionMarkdown, productionMarkdown, "utf8");
+    console.log(JSON.stringify({
+      ok: true,
+      markdown: paths.briefMarkdown,
+      productionMarkdown: paths.productionMarkdown,
+    }, null, 2));
+    return;
+  }
+
+  if (commandName === "production") {
+    const brief = await readLatestBrief(config.dataDir);
+    const productionMarkdown = renderCognitiveProductionMarkdown(brief);
+    const paths = dailyPaths(config.dataDir, brief.date);
+    await writeFile(paths.productionMarkdown, productionMarkdown, "utf8");
+    console.log(JSON.stringify({ ok: true, productionMarkdown: paths.productionMarkdown }, null, 2));
     return;
   }
 
@@ -114,7 +219,12 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
         okCount: results.filter((result) => result.ok).length,
       },
     });
-    console.log(JSON.stringify({ ok: true, readiness, sources: results }, null, 2));
+    const setup = await inspectSetup({
+      repoRoot: config.repoRoot,
+      dataDir: config.dataDir,
+      env,
+    });
+    console.log(JSON.stringify({ ok: true, readiness, setup, sources: results }, null, 2));
     return;
   }
 
@@ -154,7 +264,33 @@ async function main(commandName: string, cliFlags: Set<string>): Promise<void> {
     return;
   }
 
-  console.log("Usage: npm run daily[:dry] | npm run collect | npm run analyze | npm run render | npm run sources | npm run sources:check | npm run doctor | npm run send:latest | npm run obsidian:add | npm run bot | npm run launchd:print | npm run launchd:install | npm run launchd:uninstall");
+  if (commandName === "scheduler:print") {
+    console.log(JSON.stringify({
+      ok: true,
+      scheduler: renderSchedulerPreview(configuredSchedulerOptions(config, env)),
+    }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:install") {
+    const result = await installScheduler(configuredSchedulerOptions(config, env));
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:status") {
+    const result = await schedulerStatus(config.repoRoot);
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  if (commandName === "scheduler:uninstall") {
+    const result = await uninstallScheduler(config.repoRoot);
+    console.log(JSON.stringify({ ok: true, scheduler: result }, null, 2));
+    return;
+  }
+
+  console.log("Usage: npm run setup | npm run setup:check | npm run verify | npm run daily[:dry] | npm run daily:scheduled | npm run collect | npm run analyze | npm run render | npm run production | npm run sources | npm run sources:check | npm run doctor | npm run send:latest | npm run obsidian:add | npm run bot | npm run scheduler:print | npm run scheduler:install | npm run scheduler:status | npm run scheduler:uninstall");
 }
 
 async function collectCommand(
@@ -213,6 +349,7 @@ async function analyzeCommand(
     modelUsage,
   };
   const markdown = renderDailyBriefMarkdown(brief);
+  const productionMarkdown = renderCognitiveProductionMarkdown(brief);
   const paths = await writeDailyArtifacts({
     dataDir: config.dataDir,
     date: latest.date,
@@ -221,6 +358,7 @@ async function analyzeCommand(
     analyzed,
     brief,
     markdown,
+    productionMarkdown,
   });
   await appendDailyRunLog(config.dataDir, {
     date: latest.date,
@@ -357,22 +495,138 @@ async function handleBotEventLine(
     });
     return;
   }
-  if (command.type === "status") {
-    const brief = await readLatestBrief(config.dataDir);
-    const latestRun = await readLatestRun(config.dataDir);
-    const usage = latestRun?.tokenUsage ?? normalizeUsage(brief.modelUsage);
-    const aiLabel = latestRun?.aiMode === "openai"
-      ? `模型：${latestRun.model ?? "unknown"}`
-      : "模型：heuristic（未调用外部 AI）";
+  if (command.type === "retryDaily") {
+    if (retryInProgress) {
+      await sendLarkMarkdown({
+        ...target,
+        markdown: "今日资讯正在重新生成，请稍候，我完成后会主动回复你。",
+        idempotencyKey: `radar-retry-busy-${Date.now()}`,
+      });
+      return;
+    }
+    retryInProgress = true;
+    try {
+      await sendLarkMarkdown({
+        ...target,
+        markdown: "收到，我正在重新检查信息源和 AI 服务，并重新生成今天的资讯。完成后会自动推送。",
+        idempotencyKey: `radar-retry-start-${Date.now()}`,
+      });
+      try {
+        await runScheduledDaily({ config, env, target, forceDelivery: true });
+        await sendLarkMarkdown({
+          ...target,
+          markdown: "检查已通过，今天的资讯已经重新生成并推送。",
+          idempotencyKey: `radar-retry-success-${Date.now()}`,
+        });
+      } catch {
+        // runScheduledDaily has already recorded the incident and attempted an alert.
+      }
+    } finally {
+      retryInProgress = false;
+    }
+    return;
+  }
+  if (command.type === "checkSources") {
+    await sendLarkMarkdown({
+      ...target,
+      markdown: "正在重新检测信息源，请稍候。",
+      idempotencyKey: `radar-source-check-start-${Date.now()}`,
+    });
+    const sources = await loadSourceConfig(config.repoRoot, env);
+    const results = await checkSources(sources);
+    const failed = results.filter((result) => !result.ok);
+    const failedLines = failed.slice(0, 10).map((result) => `- ${result.name}`);
     await sendLarkMarkdown({
       ...target,
       markdown: [
-        "信息雷达运行中。",
-        `最新日报：${brief.date}`,
-        `条目数：${brief.items.length}`,
+        `信息源检测完成：${results.length - failed.length}/${results.length} 个正常。`,
+        failed.length === 0 ? "所有信息源均已恢复。" : "仍未恢复的来源：",
+        ...failedLines,
+        failed.length > failedLines.length ? `另有 ${failed.length - failedLines.length} 个来源未恢复。` : undefined,
+        failed.length > 0 ? "你可以回复“使用可用信源继续生成”，我会基于当前可用来源重试。" : undefined,
+      ].filter(Boolean).join("\n"),
+      idempotencyKey: `radar-source-check-${Date.now()}`,
+    });
+    return;
+  }
+  if (command.type === "viewCandidates") {
+    const candidates = await readLatestCandidates(config.dataDir);
+    const visible = candidates.slice(0, 10);
+    await sendLarkMarkdown({
+      ...target,
+      markdown: visible.length > 0
+        ? [
+          `最近一次采集共有 ${candidates.length} 条候选，以下内容仅供核实，不代表已经通过质量筛选：`,
+          ...visible.map((item, index) => `${index + 1}. ${item.title}（${item.sourceName}）`),
+        ].join("\n")
+        : "目前没有可供查看的候选资讯。你可以回复“检查信息源”确认采集状态。",
+      idempotencyKey: `radar-candidates-${Date.now()}`,
+    });
+    return;
+  }
+  if (command.type === "failureHelp") {
+    const incident = await readLatestIncident(config.dataDir);
+    await sendLarkMarkdown({
+      ...target,
+      markdown: renderIncidentHelp(incident),
+      idempotencyKey: `radar-incident-help-${Date.now()}`,
+    });
+    return;
+  }
+  if (command.type === "balance") {
+    const balanceConfig = resolveDeepSeekBalanceConfig(env);
+    if (!balanceConfig) {
+      await sendLarkMarkdown({
+        ...target,
+        markdown: "当前没有可用的 DeepSeek 余额查询配置。请确认 AI_BASE_URL 指向 DeepSeek，并已配置 AI_API_KEY。",
+        idempotencyKey: `radar-balance-unconfigured-${Date.now()}`,
+      });
+      return;
+    }
+    try {
+      const balance = await queryDeepSeekBalance(balanceConfig);
+      await sendLarkMarkdown({
+        ...target,
+        markdown: renderDeepSeekBalance(balance, config.timezone),
+        idempotencyKey: `radar-balance-${Date.now()}`,
+      });
+    } catch (error) {
+      await sendLarkMarkdown({
+        ...target,
+        markdown: error instanceof Error ? error.message : "DeepSeek 余额暂时无法查询，请稍后再试。",
+        idempotencyKey: `radar-balance-error-${Date.now()}`,
+      });
+    }
+    return;
+  }
+  if (command.type === "status") {
+    const latestRun = await readLatestRun(config.dataDir);
+    const incident = await readLatestIncident(config.dataDir);
+    const brief = await readLatestBriefSafe(config.dataDir);
+    const usage = latestRun?.tokenUsage ?? normalizeUsage(brief?.modelUsage);
+    const aiLabel = latestRun
+      ? latestRun.aiMode === "openai"
+        ? `模型：${latestRun.model ?? "unknown"}`
+        : "模型：heuristic（未调用外部 AI）"
+      : config.ai.mode === "openai"
+        ? `配置模型：${config.ai.model ?? "unknown"}`
+        : "配置模型：heuristic（未调用外部 AI）";
+    await sendLarkMarkdown({
+      ...target,
+      markdown: [
+        !latestRun
+          ? "尚无运行记录。"
+          : latestRun.status === "failed"
+            ? "信息雷达最近一次运行失败。"
+            : "信息雷达最近一次运行成功。",
+        latestRun ? `最近运行：${latestRun.generatedAt}` : undefined,
+        brief ? `最新日报：${brief.date}` : "尚未生成可用日报。",
+        brief ? `条目数：${brief.items.length}` : undefined,
         aiLabel,
         `Token：${usage.totalTokens}（prompt ${usage.promptTokens} / completion ${usage.completionTokens}）`,
-      ].join("\n"),
+        incident?.status === "open" ? `待处理问题：${incident.message}` : undefined,
+        incident?.status === "open" ? "回复“查看处理指引”获取下一步操作。" : undefined,
+      ].filter(Boolean).join("\n"),
       idempotencyKey: `radar-status-${Date.now()}`,
     });
     return;
@@ -380,12 +634,6 @@ async function handleBotEventLine(
   if (command.type === "help") {
     await sendLarkMarkdown({ ...target, markdown: renderHelp(), idempotencyKey: `radar-help-${Date.now()}` });
   }
-}
-
-function larkTargetFromEnv(env: Record<string, string | undefined>): { chatId: string } | { userId: string } {
-  if (env.LARK_CHAT_ID) return { chatId: env.LARK_CHAT_ID };
-  if (env.LARK_USER_ID) return { userId: env.LARK_USER_ID };
-  throw new Error("Missing LARK_CHAT_ID or LARK_USER_ID in .env. You can also pass --chat-id or --user-id.");
 }
 
 function larkTargetFromArgs(): { chatId: string } | { userId: string } | undefined {
@@ -397,7 +645,7 @@ function larkTargetFromArgs(): { chatId: string } | { userId: string } | undefin
 }
 
 function isAllowed(value: string | undefined, csv: string | undefined): boolean {
-  if (!csv) return true;
+  if (!csv) return false;
   if (!value) return false;
   return csv.split(",").map((item) => item.trim()).includes(value);
 }
@@ -434,15 +682,31 @@ function normalizeUsage(usage: {
   };
 }
 
-async function readLatestRun(dataDir: string): Promise<{
-  aiMode?: string;
-  model?: string;
-  tokenUsage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
-} | undefined> {
+async function readLatestRun(dataDir: string): Promise<DailyRunLogEntry | undefined> {
   try {
     return JSON.parse(await readFile(path.join(dataDir, "state", "latest-run.json"), "utf8"));
   } catch {
     return undefined;
+  }
+}
+
+async function readLatestBriefSafe(dataDir: string) {
+  try {
+    return await readLatestBrief(dataDir);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readLatestCandidates(dataDir: string): Promise<ArticleCandidate[]> {
+  try {
+    const incident = await readLatestIncident(dataDir);
+    const brief = await readLatestBriefSafe(dataDir);
+    const date = incident?.date ?? brief?.date;
+    if (!date) return [];
+    return JSON.parse(await readFile(dailyPaths(dataDir, date).candidates, "utf8")) as ArticleCandidate[];
+  } catch {
+    return [];
   }
 }
 
@@ -457,4 +721,17 @@ function renderConfiguredLaunchdPlists(
     hour: Number(env.RADAR_DAILY_HOUR ?? 8),
     minute: Number(env.RADAR_DAILY_MINUTE ?? 0),
   });
+}
+
+function configuredSchedulerOptions(
+  config: ReturnType<typeof loadRuntimeConfig>,
+  env: Record<string, string | undefined>,
+) {
+  return {
+    repoRoot: config.repoRoot,
+    dataDir: config.dataDir,
+    nodePath: process.execPath,
+    hour: Number(env.RADAR_DAILY_HOUR ?? 8),
+    minute: Number(env.RADAR_DAILY_MINUTE ?? 0),
+  };
 }

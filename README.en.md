@@ -21,26 +21,36 @@ It is designed for researchers, creators, product builders, investors, and engin
 - 24-hour freshness window: only items published in the previous 24 hours enter the candidate pool.
 - Candidate deduplication and fair source sampling.
 - OpenAI-compatible analysis mode or local heuristic mode.
+- Cognitive production view with reading priority, cognitive-increment hypotheses, and creation angles.
 - Lark/Feishu push using interactive message cards with clickable article links.
-- Bot commands: `帮助`, `状态`, `重发日报`, `收藏第3条`, `加入待读 3 5`.
+- Bot commands: `帮助`, `状态`, `为什么今天没有推送`, `查询余额`, `重发日报`, `收藏第3条`, and `加入待读 3 5`. Status and DeepSeek balance queries use deterministic local logic and consume no model tokens.
 - Obsidian reading-list integration.
-- macOS launchd scheduling and long-running bot event listener.
+- macOS launchd and Windows Task Scheduler support, plus a long-running bot event listener.
 - Daily run logs with model mode, model name, token usage, source count, candidate count, and selected item count.
 
 ## Installation
 
 Requirements:
 
-- macOS for launchd scheduling
+- macOS or Windows 10/11
 - Node.js 25+
 - `lark-cli` for Lark/Feishu bot messaging and events
+- Windows PowerShell 5.1+ and Task Scheduler
 
 ```bash
 git clone https://github.com/HANKSEN/daily-info-radar.git
 cd daily-info-radar
-cp .env.example .env
 npm test
+npm run setup
 ```
+
+See the [complete setup guide](./docs/setup-guide/manual-setup.en.md) for the end-to-end workflow.
+
+## Agent-guided Setup
+
+The repository includes a root `AGENTS.md`, staged readiness checks, and an [agent execution guide](./docs/setup-guide/agent-setup.md). Give the repository URL to a local coding agent with terminal access and ask it to follow those files completely. Secrets must be entered locally, never pasted into chat.
+
+After setup, `npm run verify` runs tests, source diagnostics, staged readiness checks, and a dry-run artifact verification. A reusable local RSSHub template is available under [`deploy/rsshub/`](./deploy/rsshub/README.md).
 
 ## Configuration
 
@@ -54,7 +64,11 @@ RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
-RADAR_DAILY_MINUTE=30
+RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 
 LARK_CHAT_ID=oc_xxx
 LARK_ALLOWED_CHAT_IDS=oc_xxx
@@ -105,6 +119,12 @@ Generate a real daily brief:
 npm run daily
 ```
 
+Generate or rebuild the cognitive production Markdown:
+
+```bash
+npm run production
+```
+
 Send the latest brief to Lark:
 
 ```bash
@@ -141,17 +161,25 @@ Run the bot event listener:
 npm run bot
 ```
 
-Install and load launchd jobs:
+Scheduled jobs use `npm run daily:scheduled` to collect, analyze, and deliver in one alert-aware workflow. When a blocking stage fails, the bot sends an incident card with a natural-language recovery prompt. Supported replies include `重新生成今天的资讯`, `检查信息源`, `查看今日候选资讯`, and `查看处理指引`.
+
+`重发日报` only resends an existing brief, while `重新生成今天的资讯` reruns the complete workflow. Optional source failures are logged without alerts by default. Never send API keys, App Secrets, or a complete `.env` file through Feishu.
+
+Install and load cross-platform scheduled jobs:
 
 ```bash
-npm run launchd:install -- --load
+npm run scheduler:print
+npm run scheduler:install
+npm run scheduler:status
 ```
 
 Uninstall:
 
 ```bash
-npm run launchd:uninstall -- --unload
+npm run scheduler:uninstall
 ```
+
+The legacy `launchd:*` commands remain available for macOS compatibility and debugging.
 
 ## Data Directory
 
@@ -165,9 +193,13 @@ It contains:
 
 - `raw/` collected source data
 - `candidates/` candidate and analysis outputs
-- `briefs/` JSON and Markdown briefs
+- `briefs/json/` JSON briefs
+- `briefs/markdown/` regular Markdown briefs
+- `briefs/production/` cognitive production Markdown for deep reading, insight cards, and content creation
 - `logs/daily-runs.jsonl` daily run and token usage logs
+- `logs/incidents.jsonl` incident and recovery history
 - `state/` latest brief, latest run status, and event dedupe state
+- `dry-run/` and `verification/` isolated test artifacts that do not replace production state
 
 Do not commit this directory.
 
@@ -177,11 +209,11 @@ Do not commit this directory.
 - `.env.example` only contains placeholders.
 - API keys, Lark App Secrets, and access tokens are not written to logs.
 - AI input contains only titles, source names, publish times, summaries, URLs, and local signals, not full article bodies.
-- launchd uses `LARK_CLI_NO_PROXY=1` to avoid sending Lark credentials through local proxies.
+- Lark CLI subprocesses use `LARK_CLI_NO_PROXY=1` to avoid sending credentials through local proxies.
 
 ## Sleep and Scheduling
 
-launchd runs normally when the Mac is locked but awake. It cannot guarantee on-time delivery while the Mac is fully asleep. Configure macOS wake scheduling separately if strict delivery time matters.
+macOS runs normally while locked but may delay work during true sleep. Windows tasks run while locked, start missed runs when available, and request wake-to-run; actual wake behavior still depends on the Windows wake-timer power policy.
 
 ## License
 

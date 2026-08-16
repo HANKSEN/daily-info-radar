@@ -50,3 +50,15 @@ test("RADAR_AI_MODE can switch daily analysis to heuristic mode", async () => {
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("alert settings use conservative defaults", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "radar-config-"));
+  const config = loadRuntimeConfig({ repoRoot: path.join(root, "repo"), env: {} });
+
+  assert.equal(config.alerts.enabled, true);
+  assert.equal(config.alerts.minHealthySources, 10);
+  assert.equal(config.alerts.maxSourceFailureRatio, 0.5);
+  assert.equal(config.alerts.alertOnPartialSourceFailure, false);
+
+  await rm(root, { recursive: true, force: true });
+});

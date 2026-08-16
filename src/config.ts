@@ -36,6 +36,15 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       apiKey: env.AI_API_KEY,
       model: env.AI_MODEL,
     },
+    alerts: {
+      enabled: parseBoolean(env.RADAR_ALERTS_ENABLED, true),
+      minHealthySources: parsePositiveInt(env.RADAR_MIN_HEALTHY_SOURCES, 10),
+      maxSourceFailureRatio: parseRatio(env.RADAR_MAX_SOURCE_FAILURE_RATIO, 0.5),
+      alertOnPartialSourceFailure: parseBoolean(
+        env.RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE,
+        false,
+      ),
+    },
   };
 }
 
@@ -91,6 +100,19 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  if (/^(1|true|yes|on)$/iu.test(value)) return true;
+  if (/^(0|false|no|off)$/iu.test(value)) return false;
+  return fallback;
+}
+
+function parseRatio(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
 }
 
 function parseAiMode(value: string | undefined): "openai" | "heuristic" {

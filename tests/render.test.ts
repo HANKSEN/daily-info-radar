@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { renderDailyBriefMarkdown } from "../src/renderers/markdown.ts";
+import { renderCognitiveProductionMarkdown } from "../src/renderers/production.ts";
 import type { DailyBrief } from "../src/types.ts";
 
 test("renderDailyBriefMarkdown includes market snapshot and clickable source links", () => {
@@ -39,6 +40,13 @@ test("renderDailyBriefMarkdown includes market snapshot and clickable source lin
         valueScore: 5,
         selected: true,
         recommendationReason: "官方发布，影响模型生态。",
+        cognitiveSignal: {
+          score: 5,
+          priority: "精读",
+          tags: ["判断更新", "创作素材"],
+          hypothesis: "可能更新我对模型生态优先级的判断。",
+          contentAngle: "拆解模型发布背后的生态影响。",
+        },
       },
     ],
     sourceStats: {
@@ -52,4 +60,51 @@ test("renderDailyBriefMarkdown includes market snapshot and clickable source lin
   assert.match(markdown, /纳斯达克 100: \+0.80%/);
   assert.match(markdown, /\[OpenAI launches a new model\]\(https:\/\/openai.com\/blog\/model\)/);
   assert.match(markdown, /推荐理由：官方发布，影响模型生态。/);
+  assert.match(markdown, /认知优先级：精读 \/ 5\/5/);
+  assert.match(markdown, /增量假设：可能更新我对模型生态优先级的判断。/);
+});
+
+test("renderCognitiveProductionMarkdown creates a reading and creation handoff", () => {
+  const brief: DailyBrief = {
+    date: "2026-06-13",
+    generatedAt: "2026-06-13T00:30:00.000Z",
+    marketSnapshot: [],
+    sourceStats: { openai: 1 },
+    items: [
+      {
+        sourceId: "openai",
+        sourceName: "OpenAI Blog",
+        url: "https://openai.com/blog/model",
+        canonicalUrl: "https://openai.com/blog/model",
+        title: "OpenAI launches a new model",
+        dedupeKey: "openai launches a new model",
+        localSignals: {
+          sourceWeight: 1,
+          freshnessScore: 1,
+          duplicateCount: 1,
+        },
+        domain: "ai",
+        contentType: "official",
+        useTags: ["值得深读", "可做选题"],
+        valueScore: 5,
+        selected: true,
+        recommendationReason: "官方发布，影响模型生态。",
+        cognitiveSignal: {
+          score: 5,
+          priority: "精读",
+          tags: ["判断更新", "创作素材"],
+          hypothesis: "可能更新我对模型生态优先级的判断。",
+          contentAngle: "拆解模型发布背后的生态影响。",
+        },
+      },
+    ],
+  };
+
+  const markdown = renderCognitiveProductionMarkdown(brief);
+
+  assert.match(markdown, /# 认知生产线 - 2026-06-13/);
+  assert.match(markdown, /今日精读入口/);
+  assert.match(markdown, /可转化选题/);
+  assert.match(markdown, /认知增量卡片草稿/);
+  assert.match(markdown, /可能更新我对模型生态优先级的判断。/);
 });

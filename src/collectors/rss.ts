@@ -1,5 +1,5 @@
 import type { SourceConfig, SourceItem } from "../types.ts";
-import { fetchText } from "../http.ts";
+import { fetchText, type FetchTextOptions, type FetchTextResult } from "../http.ts";
 
 const RSS_TIMEOUT_MS = 8000;
 type RssFallbackSource = {
@@ -18,12 +18,20 @@ const RSS_FALLBACK_URLS: Record<string, RssFallbackSource[]> = {
   ],
 };
 
-export async function collectRssSource(source: SourceConfig): Promise<SourceItem[]> {
+export type RssTextFetcher = (
+  url: string,
+  options?: FetchTextOptions,
+) => Promise<FetchTextResult>;
+
+export async function collectRssSource(
+  source: SourceConfig,
+  fetcher: RssTextFetcher = fetchText,
+): Promise<SourceItem[]> {
   const targets = getRssSourceTargets(source);
   const errors: unknown[] = [];
   for (const target of targets) {
     try {
-      const response = await fetchText(target.url, {
+      const response = await fetcher(target.url, {
         headers: {
           "user-agent": "daily-info-radar/0.1",
         },

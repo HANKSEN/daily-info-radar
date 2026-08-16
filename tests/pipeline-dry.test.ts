@@ -30,8 +30,10 @@ test("dry-run pipeline writes daily outputs only to the private data directory",
 
   const jsonPath = path.join(dataDir, "briefs", "json", "2026-06-13.json");
   const markdownPath = path.join(dataDir, "briefs", "markdown", "2026-06-13.md");
+  const productionPath = path.join(dataDir, "briefs", "production", "2026-06-13.md");
   await stat(jsonPath);
   await stat(markdownPath);
+  await stat(productionPath);
 
   await assert.rejects(stat(path.join(repoRoot, "data")));
   await assert.rejects(stat(path.join(repoRoot, "logs")));
@@ -40,6 +42,12 @@ test("dry-run pipeline writes daily outputs only to the private data directory",
   assert.match(markdown, /纳斯达克 100/);
   assert.match(markdown, /\[1\]\s/);
   assert.match(markdown, /推荐理由/);
+  assert.match(markdown, /认知优先级/);
+
+  const production = await readFile(productionPath, "utf8");
+  assert.match(production, /# 认知生产线 - 2026-06-13/);
+  assert.match(production, /今日精读入口/);
+  assert.match(production, /认知增量卡片草稿/);
 
   const latestRun = JSON.parse(await readFile(path.join(dataDir, "state", "latest-run.json"), "utf8"));
   assert.equal(latestRun.date, "2026-06-13");

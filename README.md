@@ -12,7 +12,7 @@ Daily Info Radar 是一个面向 AI、科技与市场信息的每日资讯雷达
 
 - 信息源分散：统一聚合英文官方博客、技术社区、中文 AI/科技媒体、市场快照。
 - 信息噪声高：只保留前 24 小时内发布的内容，并按来源权重、重复度和模型/规则评分筛选。
-- 每日流程重复：支持本地归档、飞书推送、Obsidian 待读清单和 launchd 定时运行。
+- 每日流程重复：支持本地归档、飞书推送、Obsidian 待读清单和跨平台定时运行。
 - 数据与代码混在一起：默认把日报、日志、缓存和运行状态写入仓库外的私有数据目录，便于开源代码而不泄露生产数据。
 
 ## 核心能力
@@ -21,26 +21,40 @@ Daily Info Radar 是一个面向 AI、科技与市场信息的每日资讯雷达
 - 24 小时时效窗口：只让最近 24 小时发布的资讯进入候选池。
 - 候选去重与公平采样：避免单一来源刷屏。
 - AI 分析或本地规则分析：OpenAI-compatible API 模式与 heuristic 模式可切换。
+- 认知生产线视图：为每条精选信息生成认知优先级、增量假设和内容角度。
 - 飞书推送：默认使用飞书消息卡片，文章标题可点击打开原文。
-- 机器人交互：支持「帮助」「状态」「重发日报」「收藏第3条」「加入待读 3 5」。
+- 机器人交互：支持「帮助」「状态」「为什么今天没有推送」「查询余额」「重发日报」「收藏第3条」「加入待读 3 5」。状态与 DeepSeek 余额查询由本地确定性逻辑处理，不消耗模型 token。
 - Obsidian 待读：可把日报条目追加到本地 Markdown 清单。
-- 定时运行：macOS launchd 每日定时推送，另有常驻机器人事件监听。
+- 定时运行：macOS launchd 与 Windows Task Scheduler 每日定时推送，另有常驻机器人事件监听。
 - 运行日志：记录每日运行状态、模型模式、模型名、token usage、候选数和精选条目数。
 
 ## 安装
 
 要求：
 
-- macOS（定时任务使用 launchd）
+- macOS 或 Windows 10/11
 - Node.js 25+
 - `lark-cli`（用于飞书机器人消息和事件）
+- Windows 使用 PowerShell 5.1+ 和系统任务计划程序
 
 ```bash
 git clone https://github.com/HANKSEN/daily-info-radar.git
 cd daily-info-radar
-cp .env.example .env
 npm test
+npm run setup
 ```
+
+完整操作参见 [从 0 到 1 配置教程](./docs/setup-guide/manual-setup.md)。
+
+## 交给 Agent 配置
+
+项目提供根目录 `AGENTS.md`、分阶段检查命令和 [Agent 执行指南](./docs/setup-guide/agent-setup.md)。把仓库链接和下面的提示词交给拥有本机终端权限的 Agent：
+
+> 请克隆并配置这个项目。先完整阅读 AGENTS.md 和 docs/setup-guide/agent-setup.md；不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness 和定时任务全部通过。
+
+Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装；用户只需完成本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
+
+配置完成后可运行 `npm run verify`，一次完成测试、信源诊断、分阶段就绪检查和 dry-run 产物验证。自建 RSSHub 模板位于 [`deploy/rsshub/`](./deploy/rsshub/README.md)。
 
 ## 配置
 
@@ -54,7 +68,11 @@ RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
-RADAR_DAILY_MINUTE=30
+RADAR_DAILY_MINUTE=0
+RADAR_ALERTS_ENABLED=true
+RADAR_MIN_HEALTHY_SOURCES=10
+RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
+RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 
 LARK_CHAT_ID=oc_xxx
 LARK_ALLOWED_CHAT_IDS=oc_xxx
@@ -105,6 +123,12 @@ npm run daily:dry
 npm run daily
 ```
 
+生成或重建认知生产线 Markdown：
+
+```bash
+npm run production
+```
+
 推送最新日报到飞书：
 
 ```bash
@@ -141,17 +165,31 @@ npm run obsidian:add -- --item 3
 npm run bot
 ```
 
-安装并加载定时任务：
+定时任务使用 `npm run daily:scheduled` 统一完成采集、AI 分析和飞书发送。关键步骤失败时，机器人会发送告警卡片并提供可直接回复的自然语言建议，例如：
+
+- `余额已补充，重新推送今天的资讯`
+- `现在重新试一次`
+- `检查信息源`
+- `查看今日候选资讯`
+- `查看处理指引`
+
+`重发日报` 只重新发送已有日报；“重新生成今天的资讯”会重新执行完整流程。默认仅对阻断性故障告警，少量非关键源失败只写日志。不要通过飞书发送 API Key、App Secret 或完整 `.env`。
+
+跨平台安装并加载定时任务：
 
 ```bash
-npm run launchd:install -- --load
+npm run scheduler:print
+npm run scheduler:install
+npm run scheduler:status
 ```
 
 卸载：
 
 ```bash
-npm run launchd:uninstall -- --unload
+npm run scheduler:uninstall
 ```
+
+原有 `launchd:*` 命令继续保留，供 macOS 调试和兼容使用。
 
 ## 数据目录
 
@@ -165,9 +203,13 @@ npm run launchd:uninstall -- --unload
 
 - `raw/` 原始采集结果
 - `candidates/` 候选与分析结果
-- `briefs/` JSON 与 Markdown 日报
+- `briefs/json/` JSON 日报
+- `briefs/markdown/` 普通 Markdown 日报
+- `briefs/production/` 认知生产线 Markdown，用于精读、认知卡片和创作输出
 - `logs/daily-runs.jsonl` 每日运行与 token 日志
+- `logs/incidents.jsonl` 告警与恢复记录
 - `state/` 最新日报、最新运行状态、事件去重状态
+- `dry-run/`、`verification/` 测试与验收产物，不覆盖生产状态
 
 不要把该目录提交到 GitHub。
 
@@ -177,11 +219,11 @@ npm run launchd:uninstall -- --unload
 - `.env.example` 只保留占位符。
 - API key、飞书 App Secret、access token 不会写入日志。
 - AI 分析输入只包含标题、来源、发布时间、摘要、URL 和本地信号，不发送全文。
-- 飞书 launchd 运行环境设置了 `LARK_CLI_NO_PROXY=1`，避免飞书凭据经本地代理转发。
+- 飞书 CLI 子进程设置了 `LARK_CLI_NO_PROXY=1`，避免飞书凭据经本地代理转发。
 
 ## 休眠与定时
 
-锁屏但电脑仍然醒着时，launchd 会正常运行。电脑真正睡眠时，网络任务无法保证准点执行。若需要在睡眠状态下也尽量准点推送，需要额外配置 macOS 自动唤醒。
+macOS 锁屏但仍醒着时可正常运行；真正睡眠时可能延迟。Windows 任务支持锁屏运行、错过时间后补跑并请求唤醒，但是否能从睡眠唤醒仍取决于系统电源计划中的唤醒定时器设置。
 
 ## License
 

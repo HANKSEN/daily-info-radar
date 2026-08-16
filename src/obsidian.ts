@@ -32,9 +32,18 @@ export async function addBriefItemToReadingList(input: AddReadingListInput): Pro
     `  - 来源：${item.sourceName}`,
     `  - 分类：${item.domain} / ${item.contentType}`,
     `  - 推荐理由：${item.recommendationReason}`,
+    item.cognitiveSignal
+      ? `  - 认知优先级：${item.cognitiveSignal.priority} / ${item.cognitiveSignal.score}/5`
+      : undefined,
+    item.cognitiveSignal
+      ? `  - 增量假设：${item.cognitiveSignal.hypothesis}`
+      : undefined,
+    item.cognitiveSignal
+      ? `  - 内容角度：${item.cognitiveSignal.contentAngle}`
+      : undefined,
     `  - 加入原因：${input.reason ?? "飞书指令"}`,
     `  - 标签：${item.useTags.join(" / ")}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 
   const next = base.includes(sectionHeader)
     ? `${base}\n\n${entry}\n`

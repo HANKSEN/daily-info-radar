@@ -1,4 +1,5 @@
 import type { AnalyzedArticle, ArticleCandidate, ContentType, Domain, UseTag } from "../types.ts";
+import { buildCognitiveSignal } from "../cognitive.ts";
 
 export function analyzeCandidatesHeuristically(candidates: ArticleCandidate[]): AnalyzedArticle[] {
   return candidates.map((candidate) => {
@@ -6,6 +7,7 @@ export function analyzeCandidatesHeuristically(candidates: ArticleCandidate[]): 
     const contentType = inferContentType(candidate, domain);
     const valueScore = inferValueScore(candidate, contentType);
     const useTags = inferUseTags(domain, contentType, valueScore);
+    const recommendationReason = buildReason(candidate, domain, contentType, valueScore);
 
     return {
       ...candidate,
@@ -14,7 +16,15 @@ export function analyzeCandidatesHeuristically(candidates: ArticleCandidate[]): 
       useTags,
       valueScore,
       selected: valueScore >= 3,
-      recommendationReason: buildReason(candidate, domain, contentType, valueScore),
+      recommendationReason,
+      cognitiveSignal: buildCognitiveSignal({
+        candidate,
+        domain,
+        contentType,
+        useTags,
+        valueScore,
+        recommendationReason,
+      }),
     };
   });
 }
