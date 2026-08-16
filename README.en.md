@@ -59,7 +59,7 @@ Edit `.env`:
 ```bash
 AI_BASE_URL=https://api.deepseek.com/v1
 AI_API_KEY=replace-with-your-key
-AI_MODEL=deepseek-chat
+AI_MODEL=deepseek-v4-flash
 RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
@@ -100,7 +100,9 @@ Event subscription:
 Configure the local CLI:
 
 ```bash
+npm install -g @larksuite/cli
 lark-cli config init --new
+lark-cli auth login --recommend
 ```
 
 Fill `LARK_CHAT_ID` in `.env` with the P2P or group `chat_id`. For personal delivery, the bot does not need to join a group.

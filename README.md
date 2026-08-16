@@ -44,13 +44,13 @@ npm test
 npm run setup
 ```
 
-完整操作参见 [从 0 到 1 配置教程](./docs/setup-guide/manual-setup.md)。
+零基础用户请从 [零基础配置与使用手册](./docs/setup-guide/beginner-guide.md) 开始。需要快速查看技术步骤时，参见 [从 0 到 1 手动配置](./docs/setup-guide/manual-setup.md)。
 
 ## 交给 Agent 配置
 
 项目提供根目录 `AGENTS.md`、分阶段检查命令和 [Agent 执行指南](./docs/setup-guide/agent-setup.md)。把仓库链接和下面的提示词交给拥有本机终端权限的 Agent：
 
-> 请克隆并配置这个项目。先完整阅读 AGENTS.md 和 docs/setup-guide/agent-setup.md；不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness 和定时任务全部通过。
+> 请克隆并配置 https://github.com/HANKSEN/daily-info-radar 。先完整阅读 AGENTS.md、docs/setup-guide/agent-setup.md 和 docs/setup-guide/beginner-guide.md；不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness、飞书卡片和定时任务全部验证通过。
 
 Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装；用户只需完成本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
 
@@ -63,7 +63,7 @@ Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、�
 ```bash
 AI_BASE_URL=https://api.deepseek.com/v1
 AI_API_KEY=replace-with-your-key
-AI_MODEL=deepseek-chat
+AI_MODEL=deepseek-v4-flash
 RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
@@ -104,8 +104,12 @@ RADAR_AI_MODE=heuristic
 本机配置：
 
 ```bash
+npm install -g @larksuite/cli
 lark-cli config init --new
+lark-cli auth login --recommend
 ```
+
+长连接配置前，先启动 `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot`，再在开发者后台保存「使用长连接收事件」并发布版本。完整点击步骤见 [零基础手册](./docs/setup-guide/beginner-guide.md#6-配置飞书机器人)。
 
 拿到私聊或群聊 `chat_id` 后填入 `.env`。如果只做个人推送，机器人不必进群，可以直接使用 P2P 会话的 `chat_id`。
 
