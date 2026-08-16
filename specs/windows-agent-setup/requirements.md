@@ -41,4 +41,3 @@ Daily Info Radar currently runs its core workflow on Node.js but only provisions
 1. When a user reads the setup guide, the guide shall cover prerequisites, AI configuration, sources, RSSHub, Feishu, first run, scheduling, logs, sleep behavior, and troubleshooting.
 2. When a user changes schedule settings, the guide shall tell the user to reinstall the scheduler.
 3. When an external agent follows the agent guide, it shall be able to determine the next unresolved setup step from repository commands rather than guessing.
-

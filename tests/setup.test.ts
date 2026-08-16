@@ -88,4 +88,3 @@ test("inspectSetup treats example placeholders as missing configuration", async 
 
   await rm(root, { recursive: true, force: true });
 });
-

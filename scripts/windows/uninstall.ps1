@@ -10,4 +10,3 @@ foreach ($taskName in $taskNames) {
 }
 
 @{ ok = $true; removed = $taskNames } | ConvertTo-Json -Compress
-

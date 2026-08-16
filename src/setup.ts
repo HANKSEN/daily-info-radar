@@ -199,4 +199,3 @@ function probeCommand(command: string, args: string[]): Promise<boolean> {
     child.on("close", (code) => resolve(code === 0));
   });
 }
-

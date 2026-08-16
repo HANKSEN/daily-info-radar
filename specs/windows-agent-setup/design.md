@@ -44,4 +44,3 @@ npm scheduler commands
 - Unit-test idempotent setup initialization and staged readiness.
 - Keep all existing tests green.
 - Exercise `setup`, `setup:check`, `scheduler:print`, and legacy launchd preview locally.
-
