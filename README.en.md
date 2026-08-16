@@ -23,7 +23,7 @@ It is designed for researchers, creators, product builders, investors, and engin
 - OpenAI-compatible analysis mode or local heuristic mode.
 - Cognitive production view with reading priority, cognitive-increment hypotheses, and creation angles.
 - Lark/Feishu push using interactive message cards with clickable article links.
-- Bot commands: `帮助`, `状态`, `为什么今天没有推送`, `查询余额`, `重发日报`, `收藏第3条`, and `加入待读 3 5`. Status and DeepSeek balance queries use deterministic local logic and consume no model tokens.
+- Natural-language bot commands such as `给我来一份截至现在的最新资讯`, `把早上的日报再发一下`, and `第3条帮我保存`. A deterministic local intent router scores keywords, extracts Chinese item numbers, and asks for clarification when needed without consuming model tokens.
 - Obsidian reading-list integration.
 - macOS launchd and Windows Task Scheduler support, plus a long-running bot event listener.
 - Daily run logs with model mode, model name, token usage, source count, candidate count, and selected item count.
