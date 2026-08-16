@@ -126,7 +126,7 @@ LARK_ALLOWED_CHAT_IDS=oc_xxx
 LARK_ALLOWED_SENDER_IDS=ou_xxx
 ```
 
-详细后台点击路径和每步成功标志见 [零基础手册的飞书配置章节](./beginner-guide.md#6-配置飞书机器人)。
+详细后台点击路径和每步成功标志见 [零基础手册的飞书配置章节](./beginner-guide.md#7-配置飞书机器人)。
 
 ## 6. 首次真实运行
 

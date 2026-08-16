@@ -50,9 +50,9 @@ npm run setup
 
 项目提供根目录 `AGENTS.md`、分阶段检查命令和 [Agent 执行指南](./docs/setup-guide/agent-setup.md)。把仓库链接和下面的提示词交给拥有本机终端权限的 Agent：
 
-> 请克隆并配置 https://github.com/HANKSEN/daily-info-radar 。先完整阅读 AGENTS.md、docs/setup-guide/agent-setup.md 和 docs/setup-guide/beginner-guide.md；不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness、飞书卡片和定时任务全部验证通过。
+> 请克隆并配置 https://github.com/HANKSEN/daily-info-radar 。先完整阅读 AGENTS.md、docs/setup-guide/agent-setup.md 和 docs/setup-guide/beginner-guide.md；先确认我是否已有飞书企业账号和管理员权限，缺少时按零基础手册逐步引导我完成。不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness、飞书卡片和定时任务全部验证通过。
 
-Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装；用户只需完成本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
+Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装。用户需要亲自完成飞书账号与企业注册、本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
 
 配置完成后可运行 `npm run verify`，一次完成测试、信源诊断、分阶段就绪检查和 dry-run 产物验证。自建 RSSHub 模板位于 [`deploy/rsshub/`](./deploy/rsshub/README.md)。
 
@@ -109,7 +109,7 @@ lark-cli config init --new
 lark-cli auth login --recommend
 ```
 
-长连接配置前，先启动 `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot`，再在开发者后台保存「使用长连接收事件」并发布版本。完整点击步骤见 [零基础手册](./docs/setup-guide/beginner-guide.md#6-配置飞书机器人)。
+长连接配置前，先启动 `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot`，再在开发者后台保存「使用长连接收事件」并发布版本。完整点击步骤见 [零基础手册](./docs/setup-guide/beginner-guide.md#7-配置飞书机器人)。
 
 拿到私聊或群聊 `chat_id` 后填入 `.env`。如果只做个人推送，机器人不必进群，可以直接使用 P2P 会话的 `chat_id`。
 
