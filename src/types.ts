@@ -196,6 +196,7 @@ export type DailyRunLogEntry = {
   stage?: OperationalStage;
   errorCode?: IncidentCode;
   errorMessage?: string;
+  errorDetail?: string;
   alertSent?: boolean;
   sourceHealth?: SourceHealth;
 };

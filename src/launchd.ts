@@ -118,8 +118,6 @@ function renderPlist(input: {
 <dict>
   <key>Label</key>
   <string>${input.label}</string>
-  <key>WorkingDirectory</key>
-  <string>${input.repoRoot}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>RADAR_DATA_DIR</key>

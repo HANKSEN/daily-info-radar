@@ -73,16 +73,37 @@ export function aiResponseError(status: number, responseBody: string): RadarOper
   );
 }
 
-export function aiTransportError(error: unknown): RadarOperationalError {
+export function aiTransportError(
+  error: unknown,
+  context?: {
+    batch: number;
+    attempt: number;
+    phase: "request" | "response_body";
+    timeoutMs: number;
+    elapsedMs: number;
+  },
+): RadarOperationalError {
   const timeout = error instanceof Error
     && (error.name === "TimeoutError" || error.name === "AbortError");
+  const cause = context
+    ? new Error(
+        [
+          `batch=${context.batch}`,
+          `attempt=${context.attempt}`,
+          `phase=${context.phase}`,
+          `timeout_ms=${context.timeoutMs}`,
+          `elapsed_ms=${context.elapsedMs}`,
+        ].join(", "),
+        { cause: error },
+      )
+    : error;
   return new RadarOperationalError(
     timeout ? "AI_TIMEOUT" : "AI_UNAVAILABLE",
     "analyze",
     timeout ? "AI 服务连接超时" : "无法连接 AI 服务",
     "直接回复我“重新生成今天的资讯”，我会再次尝试。",
     true,
-    { cause: error },
+    { cause },
   );
 }
 

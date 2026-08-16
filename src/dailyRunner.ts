@@ -121,6 +121,7 @@ export async function runScheduledDaily(input: {
       stage: incident.stage,
       errorCode: incident.code,
       errorMessage: incident.message,
+      errorDetail: safeLocalError(operational),
       alertSent: incident.alertSent,
       sourceHealth: incident.sourceHealth,
     });
@@ -170,10 +171,20 @@ async function maybeSendSourceWarning(input: {
 }
 
 function safeLocalError(error: unknown): string {
-  const value = error instanceof Error ? error.message : "alert delivery failed";
+  const messages: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (!(current instanceof Error)) {
+      messages.push(String(current));
+      break;
+    }
+    messages.push(`${current.name}: ${current.message}`);
+    current = current.cause;
+  }
+  const value = messages.join(" <- ") || "operation failed";
   return value
     .replace(/(authorization|api[-_ ]?key|token|secret)=?[^\s,;]*/giu, "$1=[redacted]")
-    .slice(0, 240);
+    .slice(0, 600);
 }
 
 export function latestIncidentSummary(incident: DailyIncident | undefined): string {

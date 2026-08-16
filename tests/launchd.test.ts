@@ -22,6 +22,7 @@ test("renderLaunchdPlists creates daily and bot launchd templates", () => {
   assert.match(plists.daily, /daily:scheduled/u);
   assert.doesNotMatch(plists.daily, /send:latest/u);
   assert.doesNotMatch(plists.daily, /\/bin\/zsh/u);
+  assert.doesNotMatch(plists.daily, /<key>WorkingDirectory<\/key>/u);
   assert.match(plists.daily, /\/repo\/daily-info-radar\/src\/cli\.ts/u);
   assert.match(plists.bot, /com\.hanksen\.daily-info-radar\.bot/);
   assert.match(plists.bot, /<key>KeepAlive<\/key>/);

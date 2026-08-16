@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { runScheduledDaily } from "../src/dailyRunner.ts";
-import { aiResponseError } from "../src/operationalError.ts";
+import { aiResponseError, RadarOperationalError } from "../src/operationalError.ts";
 import type { DailyIncident, DailyRunLogEntry, PipelineResult, RuntimeConfig } from "../src/types.ts";
 
 test("scheduled daily alerts when AI balance is insufficient", async () => {
@@ -57,6 +57,40 @@ test("scheduled daily sends the brief and resolves an earlier incident", async (
   assert.equal(result.briefSent, true);
   assert.equal(result.warningSent, false);
   assert.equal(resolved, true);
+});
+
+test("scheduled daily persists the safe technical cause of an AI format failure", async () => {
+  const logs: DailyRunLogEntry[] = [];
+  const cause = new Error(
+    "status=200, content_type=text/plain, body_length=28, starts_with=<, request_id=request-123",
+  );
+  const failure = new RadarOperationalError(
+    "AI_UNAVAILABLE",
+    "analyze",
+    "AI 返回内容格式异常",
+    "重试",
+    true,
+    { cause },
+  );
+
+  await assert.rejects(
+    runScheduledDaily({
+      config: createConfig(),
+      env: { LARK_CHAT_ID: "oc_test" },
+      now: new Date("2026-08-13T00:00:00.000Z"),
+      dependencies: {
+        runPipeline: async () => { throw failure; },
+        sendCard: async () => ({ stdout: "", stderr: "" }),
+        writeIncident: async () => undefined,
+        appendRunLog: async (_dataDir, entry) => { logs.push(entry); },
+        resolveIncident: async () => undefined,
+      },
+    }),
+    /AI 返回内容格式异常/u,
+  );
+
+  assert.match(logs[0]?.errorDetail ?? "", /content_type=text\/plain/u);
+  assert.match(logs[0]?.errorDetail ?? "", /request_id=request-123/u);
 });
 
 test("scheduled daily attempts a compact alert when the daily card delivery fails", async () => {
