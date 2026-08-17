@@ -30,7 +30,7 @@ Edit `.env` locally. Never paste secrets into chat, issues, or GitHub:
 ```dotenv
 AI_BASE_URL=https://api.deepseek.com/v1
 AI_API_KEY=your-real-key
-AI_MODEL=deepseek-chat
+AI_MODEL=deepseek-v4-flash
 RADAR_AI_MODE=openai
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
@@ -40,6 +40,8 @@ RADAR_MIN_HEALTHY_SOURCES=10
 RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
 RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 ```
+
+Use `deepseek-v4-pro` when stronger analysis is worth the additional latency and cost.
 
 Use `RADAR_AI_MODE=heuristic` to run without an external model. Reinstall the scheduler after changing the time.
 
@@ -56,16 +58,18 @@ Use the reusable Compose template in `deploy/rsshub/README.md`; copy it to the s
 
 ## 5. Configure the Feishu/Lark bot
 
-Create a custom app, enable bot capability, grant `im:message:send_as_bot` and `im:message.p2p_msg:readonly`, select long-connection event delivery, subscribe to `im.message.receive_v1`, set the availability range, and publish the app version.
+Create a custom app, enable bot capability, and grant `im:message:send_as_bot` and `im:message.p2p_msg:readonly`.
 
 ```bash
-npx @larksuite/cli@latest install
+npm install -g @larksuite/cli
 lark-cli config init --new
+lark-cli auth login --recommend
+lark-cli auth status
 lark-cli doctor
-lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 2m --as bot
+lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot
 ```
 
-Send the bot one private message, then store the returned IDs in `.env`:
+Keep the final command running. In the developer console, select long-connection event delivery, subscribe to `im.message.receive_v1`, set an availability range that includes your account, and publish the app version. Send the bot one private message, then store the returned IDs in `.env`:
 
 ```dotenv
 LARK_CHAT_ID=oc_xxx

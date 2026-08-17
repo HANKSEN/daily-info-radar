@@ -1,6 +1,6 @@
 # Daily Info Radar Agent Setup Contract
 
-This repository is designed to be configured by a local coding agent on macOS or Windows. Read this file and `docs/setup-guide/agent-setup.md` before changing files or running setup commands.
+This repository is designed to be configured by a local coding agent on macOS or Windows. Read this file, `docs/setup-guide/agent-setup.md`, and `docs/setup-guide/beginner-guide.md` before changing files or running setup commands.
 
 ## Safety Rules
 
@@ -14,21 +14,22 @@ This repository is designed to be configured by a local coding agent on macOS or
 
 ## Required Workflow
 
-1. Confirm the operating system and verify Node.js 25 or newer.
-2. Run `npm test`.
-3. Run `npm run setup`; this creates `.env` only when absent and initializes external storage.
-4. Run `npm run setup:check` and use its staged readiness fields as the source of truth.
-5. Ask the user to enter missing AI credentials locally, or set `RADAR_AI_MODE=heuristic` with their consent.
-6. Install `lark-cli` when missing with `npx @larksuite/cli@latest install`.
-7. Run `lark-cli config init --new` for a new app, or bind the user's existing app. Forward the browser URL and wait for the user to finish the browser action.
-8. Ensure the Feishu app has bot capability, `im:message:send_as_bot`, `im:message.p2p_msg:readonly`, long-connection event delivery, and `im.message.receive_v1`; the user may need to publish the app version.
-9. Capture one private-message event with `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 2m --as bot`. Ask the user to message the bot, then write the returned `chat_id` and `sender_id` into the non-secret allowlist fields in `.env`.
-10. Run `npm run sources:check`, then `npm run doctor`. Resolve required failures; individual source failures are allowed when at least one source remains reachable. When the RSSHub-backed key sources fail and Docker is available, copy `deploy/rsshub/docker-compose.yml` to the sibling `daily-info-radar.local-rsshub` directory and start it there.
-11. Run `npm run daily:dry`, `npm run daily`, and `npm run send:latest -- --dry-run`. Scheduled execution uses `npm run daily:scheduled` after the first-send checkpoint.
-12. Ask for confirmation immediately before the first real Feishu send, then run `npm run send:latest -- --force`.
-13. Verify `npm run bot -- --dry-run`. Configure Obsidian only when requested.
-14. Run `npm run scheduler:print`, then `npm run scheduler:install`, and verify with `npm run scheduler:status`.
-15. Finish with `npm run verify` and `npm run scheduler:status`, then report the four readiness fields, failed sources, data/log paths, schedule, and sleep limitations.
+1. Confirm that the user has a Feishu enterprise account and administrator permission. If missing, guide them through section 3 of `docs/setup-guide/beginner-guide.md` one screen at a time.
+2. Confirm the operating system and verify Node.js 25 or newer.
+3. Run `npm test`.
+4. Run `npm run setup`; this creates `.env` only when absent and initializes external storage.
+5. Run `npm run setup:check` and use its staged readiness fields as the source of truth.
+6. Ask the user to enter missing AI credentials locally, or set `RADAR_AI_MODE=heuristic` with their consent.
+7. Install `lark-cli` when missing with `npm install -g @larksuite/cli`. Install the official Feishu Agent Skill with `npx -y skills add https://open.feishu.cn --skill -y` when the current agent supports skills.
+8. Run `lark-cli config init --new` for a new app, let the user enter App ID and App Secret locally, then run `lark-cli auth login --recommend` and forward the browser URL for user authorization.
+9. Ensure the Feishu custom app has bot capability, `im:message:send_as_bot`, and `im:message.p2p_msg:readonly`.
+10. Start `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot` before the user saves long-connection event delivery. Then add `im.message.receive_v1`, publish the app version, ask the user to send one private message, and write the returned `chat_id` and `sender_id` into the non-secret allowlist fields in `.env`.
+11. Run `npm run sources:check`, then `npm run doctor`. Resolve required failures; individual source failures are allowed when at least one source remains reachable. When the RSSHub-backed key sources fail and Docker is available, copy `deploy/rsshub/docker-compose.yml` to the sibling `daily-info-radar.local-rsshub` directory and start it there.
+12. Run `npm run daily:dry`, `npm run daily`, and `npm run send:latest -- --dry-run`. Scheduled execution uses `npm run daily:scheduled` after the first-send checkpoint.
+13. Ask for confirmation immediately before the first real Feishu send, then run `npm run send:latest -- --force`.
+14. Verify `npm run bot -- --dry-run`. Configure Obsidian only when requested.
+15. Run `npm run scheduler:print`, then `npm run scheduler:install`, and verify with `npm run scheduler:status`.
+16. Finish with `npm run verify` and `npm run scheduler:status`, then report the four readiness fields, failed sources, data/log paths, schedule, and sleep limitations.
 
 ## Platform Notes
 

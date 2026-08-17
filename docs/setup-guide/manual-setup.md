@@ -2,6 +2,8 @@
 
 本教程适用于 macOS 和 Windows 10/11。核心资讯流程跨平台；macOS 使用 launchd，Windows 使用系统任务计划程序。
 
+零基础用户建议优先阅读 [零基础配置与使用手册](./beginner-guide.md)。该手册提供 Agent 自动配置提示词、飞书后台点击步骤、成功标志和常见问题处理。
+
 ## 1. 准备
 
 安装 Git、Node.js 25+，并准备一个 OpenAI-compatible API Key。飞书推送需要企业自建应用；LatePost、36Kr、虎嗅的稳定接入建议准备 Docker Desktop 自建 RSSHub。
@@ -30,7 +32,7 @@ npm run setup
 ```dotenv
 AI_BASE_URL=https://api.deepseek.com/v1
 AI_API_KEY=填写实际密钥
-AI_MODEL=deepseek-chat
+AI_MODEL=deepseek-v4-flash
 RADAR_AI_MODE=openai
 RADAR_TIMEZONE=Asia/Shanghai
 RADAR_DAILY_HOUR=8
@@ -40,6 +42,8 @@ RADAR_MIN_HEALTHY_SOURCES=10
 RADAR_MAX_SOURCE_FAILURE_RATIO=0.5
 RADAR_ALERT_ON_PARTIAL_SOURCE_FAILURE=false
 ```
+
+需要更强分析能力时可以使用 `deepseek-v4-pro`。
 
 没有 API Key 时可以先设置 `RADAR_AI_MODE=heuristic`。修改时间后必须重新运行 `npm run scheduler:install`。
 
@@ -84,36 +88,45 @@ RSSHUB_BASE_URL=http://127.0.0.1:1200
 
 ## 5. 配置飞书机器人
 
-在飞书开放平台创建企业自建应用，开启机器人能力和以下权限：
+在飞书开放平台创建企业自建应用，添加机器人能力，开通以下最小权限：
 
 - `im:message:send_as_bot`
 - `im:message.p2p_msg:readonly`
 
-事件订阅选择长连接并添加 `im.message.receive_v1`，设置应用可用范围，然后创建并发布版本。
-
-安装和配置 CLI：
+安装 CLI，然后在本机交互界面输入 App ID 和 App Secret：
 
 ```bash
-npx @larksuite/cli@latest install
+npm install -g @larksuite/cli
 lark-cli config init --new
+lark-cli auth login --recommend
+lark-cli auth status
 lark-cli doctor
 ```
 
-App Secret 通过交互流程输入并由本机凭据存储管理，不要写入仓库。
+App Secret 由本机凭据存储管理。不要将 App Secret 写入仓库、聊天或截图。
 
-获取机器人会话 ID：
+先在终端启动事件监听：
 
 ```bash
-lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 2m --as bot
+lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot
 ```
 
-命令等待期间给机器人发一条私聊消息，然后把输出中的值写入 `.env`：
+保持监听命令运行，再在飞书开发者后台完成：
+
+1. 进入「事件与回调」，选择「使用长连接收事件」并保存。
+2. 添加 `im.message.receive_v1` 事件。
+3. 创建应用版本，将可用范围至少设为包含自己，然后发布。
+4. 在飞书中私聊机器人并发送「测试」。
+
+将终端输出中的 `chat_id` 和发送者 `open_id` 写入 `.env`：
 
 ```dotenv
 LARK_CHAT_ID=oc_xxx
 LARK_ALLOWED_CHAT_IDS=oc_xxx
 LARK_ALLOWED_SENDER_IDS=ou_xxx
 ```
+
+详细后台点击路径和每步成功标志见 [零基础手册的飞书配置章节](./beginner-guide.md#7-配置飞书机器人)。
 
 ## 6. 首次真实运行
 

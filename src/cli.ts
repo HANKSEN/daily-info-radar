@@ -31,7 +31,14 @@ import { checkSources, summarizeSources } from "./sources.ts";
 import { validateRuntimeReadiness } from "./runtimeReadiness.ts";
 import { buildLarkMessageArgs, sendLarkCard, sendLarkMarkdown } from "./lark/send.ts";
 import { addBriefItemToReadingList } from "./obsidian.ts";
-import { parseBotCommand, renderHelp } from "./bot/commands.ts";
+import {
+  parseBotCommand,
+  renderClarification,
+  renderHelp,
+  renderUnknownCommand,
+  resolveClarificationChoice,
+  type ClarificationCommand,
+} from "./bot/commands.ts";
 import { parseLarkEventLine } from "./bot/events.ts";
 import { rememberEventIfNew } from "./bot/eventDedupe.ts";
 import {
@@ -57,6 +64,11 @@ import type { ArticleCandidate, DailyRunLogEntry } from "./types.ts";
 const command = process.argv[2] ?? "help";
 const flags = new Set(process.argv.slice(3));
 let retryInProgress = false;
+const CLARIFICATION_TTL_MS = 5 * 60 * 1000;
+const pendingClarifications = new Map<string, {
+  createdAt: number;
+  command: ClarificationCommand;
+}>();
 
 try {
   await main(command, flags);
@@ -469,8 +481,35 @@ async function handleBotEventLine(
   if (!isAllowed(event.chatId, env.LARK_ALLOWED_CHAT_IDS)) return;
   if (!isAllowed(event.senderId, env.LARK_ALLOWED_SENDER_IDS)) return;
 
-  const command = parseBotCommand(event.text);
   const target = event.chatId ? { chatId: event.chatId } : larkTargetFromEnv(env);
+  const clarificationKey = botConversationKey(event.chatId, event.senderId);
+  const pending = pendingClarifications.get(clarificationKey);
+  let command = parseBotCommand(event.text);
+  if (pending) {
+    pendingClarifications.delete(clarificationKey);
+    if (Date.now() - pending.createdAt <= CLARIFICATION_TTL_MS) {
+      command = resolveClarificationChoice(event.text, pending.command.choices) ?? command;
+    }
+  }
+  if (command.type === "clarify") {
+    if (command.choices.length > 0) {
+      pendingClarifications.set(clarificationKey, { createdAt: Date.now(), command });
+    }
+    await sendLarkMarkdown({
+      ...target,
+      markdown: renderClarification(command),
+      idempotencyKey: `radar-clarify-${Date.now()}`,
+    });
+    return;
+  }
+  if (command.type === "unknown") {
+    await sendLarkMarkdown({
+      ...target,
+      markdown: renderUnknownCommand(),
+      idempotencyKey: `radar-unknown-${Date.now()}`,
+    });
+    return;
+  }
   if (command.type === "collect") {
     const filePath = env.OBSIDIAN_READING_LIST_FILE;
     if (!filePath) throw new Error("Missing OBSIDIAN_READING_LIST_FILE in .env");
@@ -648,6 +687,10 @@ function isAllowed(value: string | undefined, csv: string | undefined): boolean 
   if (!csv) return false;
   if (!value) return false;
   return csv.split(",").map((item) => item.trim()).includes(value);
+}
+
+function botConversationKey(chatId: string | undefined, senderId: string | undefined): string {
+  return `${chatId ?? "unknown-chat"}:${senderId ?? "unknown-sender"}`;
 }
 
 function readStringArg(name: string): string | undefined {

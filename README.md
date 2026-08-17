@@ -23,7 +23,7 @@ Daily Info Radar 是一个面向 AI、科技与市场信息的每日资讯雷达
 - AI 分析或本地规则分析：OpenAI-compatible API 模式与 heuristic 模式可切换。
 - 认知生产线视图：为每条精选信息生成认知优先级、增量假设和内容角度。
 - 飞书推送：默认使用飞书消息卡片，文章标题可点击打开原文。
-- 机器人交互：支持「帮助」「状态」「为什么今天没有推送」「查询余额」「重发日报」「收藏第3条」「加入待读 3 5」。状态与 DeepSeek 余额查询由本地确定性逻辑处理，不消耗模型 token。
+- 机器人交互：支持「给我来一份截至现在的最新资讯」「把早上的日报再发一下」「第3条帮我保存」等自然表达。本地意图路由会进行关键词评分、中文序号提取和歧义确认，不消耗模型 token。
 - Obsidian 待读：可把日报条目追加到本地 Markdown 清单。
 - 定时运行：macOS launchd 与 Windows Task Scheduler 每日定时推送，另有常驻机器人事件监听。
 - 运行日志：记录每日运行状态、模型模式、模型名、token usage、候选数和精选条目数。
@@ -44,15 +44,15 @@ npm test
 npm run setup
 ```
 
-完整操作参见 [从 0 到 1 配置教程](./docs/setup-guide/manual-setup.md)。
+零基础用户请从 [零基础配置与使用手册](./docs/setup-guide/beginner-guide.md) 开始。需要快速查看技术步骤时，参见 [从 0 到 1 手动配置](./docs/setup-guide/manual-setup.md)。
 
 ## 交给 Agent 配置
 
 项目提供根目录 `AGENTS.md`、分阶段检查命令和 [Agent 执行指南](./docs/setup-guide/agent-setup.md)。把仓库链接和下面的提示词交给拥有本机终端权限的 Agent：
 
-> 请克隆并配置这个项目。先完整阅读 AGENTS.md 和 docs/setup-guide/agent-setup.md；不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness 和定时任务全部通过。
+> 请克隆并配置 https://github.com/HANKSEN/daily-info-radar 。先完整阅读 AGENTS.md、docs/setup-guide/agent-setup.md 和 docs/setup-guide/beginner-guide.md；先确认我是否已有飞书企业账号和管理员权限，缺少时按零基础手册逐步引导我完成。不要让我在聊天里发送密钥，需要密钥时让我在本机安全输入。完成所有自动化步骤，直到四项 readiness、飞书卡片和定时任务全部验证通过。
 
-Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装；用户只需完成本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
+Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、真实流程验证和调度安装。用户需要亲自完成飞书账号与企业注册、本机密钥输入、必要的飞书浏览器授权、发送一条测试消息，以及确认首次真实推送。
 
 配置完成后可运行 `npm run verify`，一次完成测试、信源诊断、分阶段就绪检查和 dry-run 产物验证。自建 RSSHub 模板位于 [`deploy/rsshub/`](./deploy/rsshub/README.md)。
 
@@ -63,7 +63,7 @@ Agent 可以完成克隆、环境检查、信源诊断、飞书事件取 ID、�
 ```bash
 AI_BASE_URL=https://api.deepseek.com/v1
 AI_API_KEY=replace-with-your-key
-AI_MODEL=deepseek-chat
+AI_MODEL=deepseek-v4-flash
 RADAR_AI_MODE=openai
 
 RADAR_TIMEZONE=Asia/Shanghai
@@ -104,8 +104,12 @@ RADAR_AI_MODE=heuristic
 本机配置：
 
 ```bash
+npm install -g @larksuite/cli
 lark-cli config init --new
+lark-cli auth login --recommend
 ```
+
+长连接配置前，先启动 `lark-cli event consume im.message.receive_v1 --max-events 1 --timeout 10m --as bot`，再在开发者后台保存「使用长连接收事件」并发布版本。完整点击步骤见 [零基础手册](./docs/setup-guide/beginner-guide.md#7-配置飞书机器人)。
 
 拿到私聊或群聊 `chat_id` 后填入 `.env`。如果只做个人推送，机器人不必进群，可以直接使用 P2P 会话的 `chat_id`。
 
@@ -174,6 +178,8 @@ npm run bot
 - `查看处理指引`
 
 `重发日报` 只重新发送已有日报；“重新生成今天的资讯”会重新执行完整流程。默认仅对阻断性故障告警，少量非关键源失败只写日志。不要通过飞书发送 API Key、App Secret 或完整 `.env`。
+
+机器人会对模糊表达进行本地意图匹配。当「重新采集」和「重发已有日报」同时有可能时，它会返回编号选项，用户可以回复 `1`、`2` 或「选第一个」。
 
 跨平台安装并加载定时任务：
 

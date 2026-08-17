@@ -98,8 +98,8 @@ export async function inspectSetup(options: InspectSetupOptions): Promise<SetupR
       aiMode === "heuristic" ? "Heuristic mode; external AI is disabled" : missingAi.length === 0 ? "AI configuration is present" : `Missing AI settings: ${missingAi.join(", ")}`,
       "Fill the missing values locally in .env, or set RADAR_AI_MODE=heuristic.",
     ),
-    check("lark-cli", "delivery", larkCliInstalled, larkCliInstalled ? "lark-cli is installed" : "lark-cli is missing", "Run npx @larksuite/cli@latest install."),
-    check("lark-config", "delivery", larkConfigured, larkConfigured ? "lark-cli bot configuration is available" : "lark-cli is not configured", "Run lark-cli config init --new and complete the browser flow."),
+    check("lark-cli", "delivery", larkCliInstalled, larkCliInstalled ? "lark-cli is installed" : "lark-cli is missing", "Run npm install -g @larksuite/cli."),
+    check("lark-config", "delivery", larkConfigured, larkConfigured ? "lark-cli bot configuration is available" : "lark-cli is not configured", "Run lark-cli config init --new, then lark-cli auth login --recommend."),
     check("lark-target", "delivery", larkTargetConfigured, larkTargetConfigured ? "Feishu delivery target is configured" : "LARK_CHAT_ID or LARK_USER_ID is missing", "Capture a bot message event and fill the ID locally in .env."),
     check(
       "chat-allowlist",
